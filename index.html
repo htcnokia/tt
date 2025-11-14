@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KKKKK GROUP 資訊中心</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/libs/echarts.min.js"></script>
+</head>
+<body>
+    <!-- 登录页 -->
+    <div id="login-container" class="login-container">
+        <div class="login-box">
+            <img src="/images/logo.png" alt="Logo" class="login-logo">
+            <h2>企业微信登錄</h2>
+            <p id="login-tip">正在載入授權服務...</p>
+            <button id="login-btn" class="login-btn" style="display:none;">企业微信登錄</button>
+        </div>
+    </div>
+
+    <!-- 主页面 -->
+    <div id="main-app" style="display:none;">
+        <!-- Header -->
+        <div class="header">
+            <img src="/images/logo.png" alt="Logo" class="logo">
+            <h1>KKKKK GROUP 資訊中心</h1>
+            <div class="datetime" id="datetime"></div>
+            <div class="header-buttons">
+                <button id="fullscreen-toggle" class="icon-btn" title="全螢幕">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                    </svg>
+                </button>
+                <button id="theme-toggle" class="icon-btn" title="主題設定">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+                <button id="logout-btn" class="icon-btn" title="登出" style="display:none;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab 导航 -->
+        <div class="tab-navigation">
+            <button class="tab-button" data-tab="overview">概览</button>
+            <button class="tab-button" data-tab="milestone">里程碑</button>
+            <button class="tab-button" data-tab="techtransfer">技轉專案</button>
+            <button class="tab-button" data-tab="sales">貿易銷售</button>
+            <button class="tab-button" data-tab="purchase">貿易採購</button>
+            <button class="tab-button" data-tab="production">工廠生產</button>
+            <button class="tab-button" data-tab="inventory">庫存</button>
+            <button class="tab-button" data-tab="calendar">出差來訪</button>
+            <button class="tab-button" data-tab="hr">人力資訊</button>
+            <button class="tab-button" data-tab="dept">部門資訊</button>
+        </div>
+
+        <!-- Tab内容区域 -->
+        <div class="tab-content-wrapper">
+            <!-- 概览 Tab -->
+            <div id="overview-tab" class="tab-content active">
+                <div class="section full-section panel-bg">
+                    <div class="panel-header"><h2>數據概覽</h2></div>
+                    <div id="metabase-container" class="metabase-container">
+                        <iframe id="metabase-iframe" src="" frameborder="0"></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 动态Tab内容将在这里创建 -->
+        </div>
+
+        <!-- 设置面板 -->
+        <div id="theme-panel" class="theme-panel">
+            <div class="theme-panel-content">
+                <h3>系統設定</h3>
+                
+                <div class="settings-section">
+                    <h4>主題設定</h4>
+                    <div class="theme-option">
+                        <label>模式：</label>
+                        <button id="dark-mode-toggle" class="mode-btn">深色模式</button>
+                    </div>
+                    <div class="theme-option">
+                        <label>主色調：</label>
+                        <input type="color" id="primary-color" value="#007a7a">
+                    </div>
+                    <div class="theme-option">
+                        <label>圖表主題：</label>
+                        <select id="chart-theme">
+                            <option value="default">默認</option>
+                            <option value="macarons">馬卡龍</option>
+                            <option value="vintage">復古</option>
+                            <option value="westeros">權力的遊戲</option>
+                            <option value="wonderland">仙境</option>
+                            <option value="dark">深色</option>
+                        </select>
+                    </div>
+                    <div class="theme-option">
+                        <label>滾動速度：</label>
+                        <input type="range" id="scroll-speed" min="0.2" max="3" step="0.1" value="0.5">
+                        <span id="speed-value">0.5</span>
+                    </div>
+                </div>
+
+                <div class="settings-section" id="date-filters-section">
+                    <h4>數據篩選</h4>
+                    <div id="dynamic-filters">
+                        <!-- 动态生成的筛选器 -->
+                    </div>
+                </div>
+
+                <div class="settings-buttons">
+                    <button id="apply-settings" class="primary-btn">應用設定</button>
+                    <button id="reset-settings" class="secondary-btn">恢復默認</button>
+                    <button id="close-panel" class="secondary-btn">關閉</button>
+                </div>
+            </div>
+        </div>
+    </div>
+<!-- 图表设计器弹窗 -->
+<div id="chart-designer-modal" class="modal" style="display:none;">
+  <div class="modal-content chart-designer-modal">
+    <div class="modal-header">
+      <h3>圖表設計器 - <span id="designer-tab-name"></span></h3>
+      <button class="modal-close" onclick="closeChartDesigner()">×</button>
+    </div>
+
+    <div class="modal-body chart-designer-body">
+      <div class="designer-layout">
+        <!-- 左侧：字段和配置 -->
+        <div class="designer-sidebar">
+          <div class="sidebar-section">
+            <h4>📊 图表类型</h4>
+            <div class="chart-types">
+              <div class="chart-type-item active" data-type="bar">柱状图</div>
+              <div class="chart-type-item" data-type="line">折线图</div>
+              <div class="chart-type-item" data-type="pie">饼图</div>
+              <div class="chart-type-item" data-type="scatter">散点图</div>
+              <div class="chart-type-item" data-type="radar">雷达图</div>
+              <div class="chart-type-item" data-type="funnel">漏斗图</div>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <h4>🔍 可用字段</h4>
+            <input type="text" id="field-search" placeholder="搜索字段..." class="search-input">
+            <div class="fields-list" id="available-fields">
+              <!-- 动态生成的字段列表 -->
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <h4>⚙️ 图表配置</h4>
+            <div class="config-option">
+              <label>图表标题:</label>
+              <input type="text" id="chart-title" placeholder="输入图表标题">
+            </div>
+            <div class="config-option">
+              <label>图表主题:</label>
+              <select id="chart-theme-select">
+                <option value="default">默认</option>
+                <option value="macarons">马卡龙</option>
+                <option value="vintage">复古</option>
+                <option value="westeros">权游</option>
+                <option value="wonderland">仙境</option>
+                <option value="dark">深色</option>
+              </select>
+            </div>
+            <div class="config-option">
+              <label>
+                <input type="checkbox" id="enable-series"> 启用多系列
+              </label>
+            </div>
+            <div class="config-option">
+              <label>聚合方式:</label>
+              <select id="aggregation-method">
+                <option value="sum">求和</option>
+                <option value="avg">平均值</option>
+                <option value="count">计数</option>
+                <option value="max">最大值</option>
+                <option value="min">最小值</option>
+              </select>
+            </div>
+            <div class="config-option">
+              <label>数据限制:</label>
+              <input type="number" id="data-limit" min="0" max="1000" value="0" placeholder="0表示无限制">
+            </div>
+            <div class="config-option">
+              <label>排序方式:</label>
+              <select id="sort-order">
+                <option value="none">无排序</option>
+                <option value="asc">升序</option>
+                <option value="desc">降序</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <h4>🔧 操作</h4>
+            <div class="action-buttons">
+              <button class="primary-btn" onclick="ChartDesigner.exportChart()">导出图片</button>
+              <button class="secondary-btn" onclick="ChartDesigner.copyConfig()">复制配置</button>
+              <button class="secondary-btn" onclick="ChartDesigner.saveAsTemplate()">保存模板</button>
+              <button class="secondary-btn" onclick="ChartDesigner.loadTemplate()">加载模板</button>
+              <button class="danger-btn" onclick="ChartDesigner.reset()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 中间：拖放区域和预览 -->
+        <div class="designer-main">
+          <div class="drop-zones">
+            <div class="drop-zone-container">
+              <h4>📈 X轴 (分类)</h4>
+              <div class="drop-zone" id="drop-x-axis" data-axis="x">
+                <div class="drop-zone-content"></div>
+                <div class="drop-zone-hint">拖放字段到这里</div>
+              </div>
+            </div>
+
+            <div class="drop-zone-container">
+              <h4>📊 Y轴 (数值)</h4>
+              <div class="drop-zone" id="drop-y-axis" data-axis="y">
+                <div class="drop-zone-content"></div>
+                <div class="drop-zone-hint">拖放字段到这里</div>
+              </div>
+            </div>
+
+            <div class="drop-zone-container" id="drop-series" style="display:none;">
+              <h4>🎨 系列 (分组)</h4>
+              <div class="drop-zone" id="drop-series-axis" data-axis="series">
+                <div class="drop-zone-content"></div>
+                <div class="drop-zone-hint">拖放字段到这里</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-section">
+            <h4>👁️ 图表预览</h4>
+            <div class="preview-stats">
+              <span id="preview-data-count">数据: 0 项</span>
+              <span id="preview-filtered-count"></span>
+            </div>
+            <div class="chart-preview-container">
+              <div id="chart-preview" style="height: 400px; width: 100%;"></div>
+            </div>
+          </div>
+
+          <div class="filters-section">
+            <h4>🔍 数据筛选</h4>
+            <div class="filters-container">
+              <div id="filter-list">
+                <!-- 动态生成的过滤器 -->
+              </div>
+              <button class="secondary-btn" onclick="ChartDesigner.addFilter()">+ 添加筛选条件</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧：数据预览 -->
+        <div class="designer-preview">
+          <div class="preview-section">
+            <h4>📋 数据预览 <span id="data-count">(0 条记录)</span></h4>
+            <div class="data-preview-container">
+              <div id="data-preview" style="height: 600px; overflow: auto;">
+                <!-- 数据预览表格 -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="primary-btn" onclick="ChartDesigner.saveChart()">保存图表</button>
+      <button class="secondary-btn" onclick="closeChartDesigner()">取消</button>
+    </div>
+  </div>
+</div>
+    <script src="/script.js"></script>
+</body>
+</html>
