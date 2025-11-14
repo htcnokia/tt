@@ -70,44 +70,14 @@ const FileNameManager = {
 // 个人权限配置 - 优先于部门权限
 const USER_PERMISSIONS = {
     // 示例：特定用户的专属权限
-    'YangYu': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-    'GuoHui': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-    'ZhangMengAn': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'], 
-    'FengZhenQi': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'], 
-    'michael': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'], 
-    'terence': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-	'LeiXuePing': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept']	
+    'YnYu': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept']
     // 可以继续添加其他用户的专属权限
 };
 
 // 部门权限配置 - 使用企业微信中的实际部门名称
 const DEPT_PERMISSIONS = {
-    // 工程部权限
-    '工程部': ['overview', 'milestone','techtransfer', 'hr', 'dept'],
-    // 采购部权限  
-    '采购部': ['overview', 'purchase', 'inventory', 'hr', 'dept'],
-    // 香港用戶权限
-    'KINGS HK': ['overview', 'purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-    // 生产部权限
-    '生產部': ['overview', 'production', 'inventory', 'hr', 'dept'],
-    // 營運部权限 - 所有tab
-    '營運部': ['overview', 'purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-    // IT部权限
-    'IT部': [ 'overview','purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-	//會計部
-    '會計部': ['overview', 'purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-	//會計部/成本組
-    '會計部/成本組': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-	//廠務部
-    '廠務部': ['overview', 'purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-    // 行政部权限
-    '行政部': ['overview', 'purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-    // 供應鏈管理部权限 
-    '供應鏈管理部': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],	
-    // 人力資源部权限
-    '人力資源部': ['milestone', 'hr', 'dept'],
     // 默认权限
-    'default':  ['overview', 'purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept']
+    'default':  ['hr', 'dept']
 };
 
 // 字符筛选字段配置
