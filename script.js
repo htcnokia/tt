@@ -70,13 +70,13 @@ const FileNameManager = {
 // 个人权限配置 - 优先于部门权限
 const USER_PERMISSIONS = {
     // 示例：特定用户的专属权限
-    'YaYu': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-    'GHui': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-    'ZanengAn': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'], 
-    'Fengeni': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'], 
-    'mael': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'], 
-    'tnce': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
-    'Leng': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept']	
+    'YangYu': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
+    'GuoHui': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
+    'ZhangMengAn': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'], 
+    'FengZhenQi': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'], 
+    'michael': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'], 
+    'terence': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
+	'LeiXuePing': ['purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept']	
     // 可以继续添加其他用户的专属权限
 };
 
@@ -86,8 +86,8 @@ const DEPT_PERMISSIONS = {
     '工程部': ['overview', 'milestone','techtransfer', 'hr', 'dept'],
     // 采购部权限  
     '采购部': ['overview', 'purchase', 'inventory', 'hr', 'dept'],
-    // 用戶权限
-    'KIS HK': ['overview', 'purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
+    // 香港用戶权限
+    'KINGS HK': ['overview', 'purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept'],
     // 生产部权限
     '生產部': ['overview', 'production', 'inventory', 'hr', 'dept'],
     // 營運部权限 - 所有tab
@@ -107,7 +107,7 @@ const DEPT_PERMISSIONS = {
     // 人力資源部权限
     '人力資源部': ['milestone', 'hr', 'dept'],
     // 默认权限
-    'default':  [ 'milestone','techtransfer', 'hr', 'dept']
+    'default':  ['overview', 'purchase', 'sales', 'production', 'inventory', 'calendar', 'milestone','techtransfer', 'hr', 'dept']
 };
 
 // 字符筛选字段配置
@@ -187,7 +187,9 @@ const STATE = {
         userName: null,
         departments: []
     },
-    virtualTables: new Map() // 存储虚拟表格实例
+    virtualTables: new Map(), // 存储虚拟表格实例
+    allowedTabs: [], // 存储允许访问的tab列表
+    lastActiveTab: localStorage.getItem('last-active-tab') || 'overview' // 记住最后活动的tab
 };
 
 // ==================== 虚拟滚动表格渲染器 ====================
@@ -269,7 +271,7 @@ const VirtualTableRenderer = {
         
         this.viewport = this.container.querySelector('.virtual-scroll-viewport');
         this.content = this.container.querySelector('.virtual-scroll-content');
-        this.tbody = document.getElementById(`${this.tableId}-body-virtual`);
+        this.tbody = document.getElementById(`${tableId}-body-virtual`);
         this.info = this.container.querySelector('.virtual-scroll-info');
         
         // 显示虚拟滚动提示
@@ -1191,6 +1193,7 @@ const Utils = {
     }
 };
 
+// ==================== 优化数据加载管理器 ====================
 // ==================== 数据加载管理器 ====================
 const DataLoader = {
     async loadData(tabId, forceRefresh = false) {
@@ -1218,10 +1221,15 @@ const DataLoader = {
                 
                 const filters = this.getFilters(tabId);
                 
-                // 添加用户信息到筛选条件，N8N可以用这个来生成正确的文件名
+                // 🆕 优化：添加数据量参数，确保获取全部数据
+                filters.includeAllData = true;
+                filters.limit = 0; // 0表示无限制
+                filters.maxRecords = 1000000; // 最大记录数
+                
+                // 添加用户信息到筛选条件
                 filters.userId = STATE.userInfo.userId || 'anonymous';
                 filters.userName = STATE.userInfo.userName || 'unknown';
-                filters.requestedFileName = filename; // 告诉N8N要生成的文件名
+                filters.requestedFileName = filename;
                 
                 console.log('篩選條件:', filters);
                 
@@ -1229,7 +1237,7 @@ const DataLoader = {
                 console.log('N8N觸發結果:', triggerResult);
                 
                 console.log('⏳ 等待文件生成...');
-                await this.waitForFile(filename, 10000);
+                await this.waitForFile(filename, 30000); // 增加等待时间
                 console.log('✓ 文件已生成');
             } else {
                 console.log('✓ 使用現有文件');
@@ -1237,7 +1245,18 @@ const DataLoader = {
 
             console.log('📖 讀取JSON文件...');
             const data = await Utils.readJSONFile(filename);
-            console.log('✓ 數據加載成功');
+            
+            // 🆕 优化：验证数据完整性
+            if (data && data.detail) {
+                console.log('✅ 數據加載成功，明细数据:', data.detail.length, '条');
+                
+                // 检查数据是否被截断
+                if (data.detail.length >= 10000) {
+                    console.warn('⚠️ 数据量较大，建议优化筛选条件');
+                }
+            } else {
+                console.warn('⚠️ 数据格式异常，可能缺少detail字段');
+            }
             
             return data;
 
@@ -1247,26 +1266,7 @@ const DataLoader = {
         }
     },
 
-    async waitForFile(filename, timeout = 15000) {
-        const startTime = Date.now();
-        const checkInterval = 500;
-
-        console.log(`⏳ 等待文件生成: ${filename}`);
-
-        while (Date.now() - startTime < timeout) {
-            const exists = await Utils.checkFileExists(filename);
-            if (exists) {
-                console.log(`✓ 文件已生成 (耗时: ${Date.now() - startTime}ms)`);
-                return true;
-            }
-            await new Promise(resolve => setTimeout(resolve, checkInterval));
-        }
-
-        console.error(`❌ 等待文件超时: ${filename} (超过${timeout}ms)`);
-        throw new Error(`等待文件超时: ${filename}`);
-    },
-
-    // 修改 getFilters 方法，确保包含会话信息
+    // 🆕 添加缺失的 getFilters 方法
     getFilters(tabId) {
         const filters = STATE.filters[tabId] || {};
         
@@ -1295,6 +1295,7 @@ const DataLoader = {
         return filters;
     },
 
+    // 🆕 添加缺失的 getDefaultDateType 方法
     getDefaultDateType(tabId) {
         const defaults = {
             purchase: '交货日期',
@@ -1307,6 +1308,26 @@ const DataLoader = {
             dept: '發佈日期'
         };
         return defaults[tabId] || '';
+    },
+
+    // 🆕 添加缺失的 waitForFile 方法
+    async waitForFile(filename, timeout = 15000) {
+        const startTime = Date.now();
+        const checkInterval = 500;
+
+        console.log(`⏳ 等待文件生成: ${filename}`);
+
+        while (Date.now() - startTime < timeout) {
+            const exists = await Utils.checkFileExists(filename);
+            if (exists) {
+                console.log(`✓ 文件已生成 (耗时: ${Date.now() - startTime}ms)`);
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, checkInterval));
+        }
+
+        console.error(`❌ 等待文件超时: ${filename} (超过${timeout}ms)`);
+        throw new Error(`等待文件超时: ${filename}`);
     }
 };
 
@@ -1345,6 +1366,10 @@ const Renderer = {
         console.log('=== 渲染Tab ===');
         console.log('Tab ID:', tabId);
         console.log('強制刷新:', forceRefresh);
+        
+        // 保存当前tab到localStorage
+        localStorage.setItem('last-active-tab', tabId);
+        STATE.lastActiveTab = tabId;
         
         // 清理前一个tab的资源
         MemoryManager.clearUnusedData();
@@ -2231,7 +2256,7 @@ const Renderer = {
 				}
 			case 'bar':
 				const barSeries = createSeries('bar', {
-					barWidth: '60%',
+					barWidth : '60%',
 					itemStyle: {
 						borderRadius: [5, 5, 0, 0]
 					},
@@ -2691,7 +2716,7 @@ const Renderer = {
 				
 				// ⚠️ 修复：滚动到底部时立即重置到顶部
 				if (container.scrollTop + container.clientHeight >= container.scrollHeight - 1) {
-					console.log(`🔄 ${containerId}: 滚动到底部，重新开始`);
+					//console.log(`🔄 ${containerId}: 滚动到底部，重新开始`);
 					container.scrollTop = 0;
 				}
 			}
@@ -2734,11 +2759,17 @@ const TabManager = {
         });
 
         this.createDynamicTabs();
-		// 如果权限接口已返回，这里就不会重复；如果还没返回，等权限回来再触发
-        if (!STATE.currentTab) {
-          const visible = Array.from(document.querySelectorAll('.tab-button'))
-                         .filter(b => b.style.display !== 'none');
-          if (visible.length) this.switchTab(visible[0].dataset.tab);
+		
+        // 尝试恢复上次活动的tab
+        const lastActiveTab = STATE.lastActiveTab;
+        if (lastActiveTab && this.hasPermission(lastActiveTab)) {
+            console.log(`🔄 恢复上次活动的Tab: ${lastActiveTab}`);
+            this.switchTab(lastActiveTab);
+        } else {
+            // 如果权限接口已返回，这里就不会重复；如果还没返回，等权限回来再触发
+            const visible = Array.from(document.querySelectorAll('.tab-button'))
+                             .filter(b => b.style.display !== 'none');
+            if (visible.length) this.switchTab(visible[0].dataset.tab);
         }
     },
 
@@ -2821,6 +2852,9 @@ const TabManager = {
             }
         });
 
+        // 保存到STATE
+        STATE.allowedTabs = allowedTabs;
+        
         // 如果当前tab不在允许的tab中，切换到第一个允许的tab
         const currentTab = STATE.currentTab;
         if (currentTab && !allowedTabs.includes(currentTab) && allowedTabs.length > 0) {
@@ -3193,23 +3227,25 @@ const AuthManager = {
         const mainApp = document.getElementById('main-app');
         const logoutBtn = document.getElementById('logout-btn');
 
-        try {
-            const configRes = await fetch('/api/config');
-            const config = await configRes.json();
-
-            if (!config.enableAuth) {
-                loginContainer.style.display = 'none';
-                mainApp.style.display = 'flex';
-                this.initApp();
-                return;
-            }
-        } catch (error) {
-            console.error('獲取配置失敗:', error);
-            loginContainer.style.display = 'none';
-            mainApp.style.display = 'flex';
-            this.initApp();
-            return;
-        }
+		try {
+			const configRes = await fetch('/api/config');
+			if (configRes.ok) {
+				const config = await configRes.json();
+				if (!config.enableAuth) {
+					loginContainer.style.display = 'none';
+					mainApp.style.display = 'flex';
+					this.initApp();
+					return;
+				}
+			}
+		} catch (error) {
+			console.log('⚠️ 配置获取失败，使用默认设置:', error);
+			// 如果获取配置失败，直接进入应用
+			loginContainer.style.display = 'none';
+			mainApp.style.display = 'flex';
+			this.initApp();
+			return;
+		}
 
         let token = localStorage.getItem('auth-token');
         const urlToken = new URLSearchParams(window.location.search).get('token');
@@ -3295,6 +3331,7 @@ const AuthManager = {
         SessionManager.getSessionId(); // 确保会话ID存在
 		
 		this.updateDateTime();
+		// 改为每秒刷新
 		setInterval(() => this.updateDateTime(), 1000);
 
 		TabManager.init();
@@ -3303,9 +3340,6 @@ const AuthManager = {
 
 		// 根据部门权限更新Tab显示（必须在TabManager.init之后）
 		this.applyDepartmentPermissions();
-
-		// 不要在这里强制切换到overview，让权限系统决定
-		// TabManager.switchTab('overview');
 
 		const logoutBtn = document.getElementById('logout-btn');
 		logoutBtn.addEventListener('click', () => {
@@ -3462,6 +3496,7 @@ const AuthManager = {
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit',
+            second: '2-digit',
             hour12: true
         };
         document.getElementById('datetime').textContent = now.toLocaleString('zh-CN', options);
@@ -3478,1078 +3513,6 @@ const AuthManager = {
             }
         });
     }
-};
-
-// ==================== 图表设计器 ====================
-const ChartDesigner = {
-    currentTabId: null,
-    currentData: null,
-    currentFields: [],
-    currentConfig: {
-        type: 'bar',
-        title: '',
-        theme: 'default',
-        xAxis: null,
-        yAxis: null,
-        series: null,
-        enableSeries: false,
-        aggregation: 'sum',
-        limit: 0,
-        sortOrder: 'none'
-    },
-    previewChart: null,
-    filters: [],
-
-    // 打开设计器
-    open(tabId) {
-        this.currentTabId = tabId;
-        const modal = document.getElementById('chart-designer-modal');
-        
-        if (!modal) {
-            console.error('图表设计器模态框未找到');
-            alert('圖表設計器初始化失敗,請刷新頁面重試');
-            return;
-        }
-        
-        // 先显示模态框
-        modal.style.display = 'flex';
-        
-        // 加载数据
-        const filename = FileNameManager.getFileName(tabId);
-        
-        Utils.readJSONFile(filename).then(data => {
-            const detail = data.detail || [];
-            if (detail.length === 0) {
-                alert('暫無明細數據,無法設計圖表');
-                this.close();
-                return;
-            }
-
-            this.currentData = detail;
-            this.currentFields = Object.keys(detail[0]);
-            
-            console.log('✅ 数据加载成功:', {
-                tabId,
-                records: detail.length,
-                fields: this.currentFields.length
-            });
-            
-            this.init();
-        }).catch(err => {
-            console.error('❌ 加载数据失败:', err);
-            alert('無法加載數據:' + err.message);
-            this.close();
-        });
-    },
-
-    // 初始化设计器
-    init() {
-        // 验证必要的 DOM 元素
-        const requiredElements = [
-            'available-fields',
-            'field-search',
-            'chart-preview',
-            'data-preview',
-            'data-count',
-            'chart-title',
-            'chart-theme-select',
-            'enable-series',
-            'aggregation-method',
-            'data-limit',
-            'sort-order',
-            'filter-list',
-            'preview-data-count',
-            'preview-filtered-count'
-        ];
-        
-        const missingElements = requiredElements.filter(id => !document.getElementById(id));
-        
-        if (missingElements.length > 0) {
-            console.error('❌ 缺少必要的 DOM 元素:', missingElements);
-            alert('圖表設計器初始化失敗:部分界面元素未加載\n缺少元素:' + missingElements.join(', '));
-            this.close();
-            return;
-        }
-        
-        console.log('✅ DOM 元素验证通过,开始初始化...');
-        
-        // 等待 DOM 完全准备好
-        setTimeout(() => {
-            try {
-                this.renderFields();
-                this.renderChartTypes();
-                this.initDragAndDrop();
-                this.initEventListeners();
-                this.updateDataPreview();
-                this.renderFilters();
-                this.refreshPreview();
-                
-                console.log('✅ 图表设计器初始化完成');
-            } catch (error) {
-                console.error('❌ 初始化过程出错:', error);
-                alert('圖表設計器初始化失敗:' + error.message);
-                this.close();
-            }
-        }, 100);
-    },
-
-    // 渲染字段列表
-    renderFields() {
-        const container = document.getElementById('available-fields');
-        const searchInput = document.getElementById('field-search');
-        
-        if (!container || !searchInput) {
-            console.error('字段容器未找到');
-            return;
-        }
-        
-        const renderFilteredFields = (filter = '') => {
-            const filtered = this.currentFields.filter(field => 
-                field.toLowerCase().includes(filter.toLowerCase())
-            );
-            
-            container.innerHTML = filtered.map(field => `
-                <div class="field-item" draggable="true" data-field="${field}">
-                    <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="18" height="18" rx="2"/>
-                        <path d="M3 9h18M9 3v18"/>
-                    </svg>
-                    <span>${field}</span>
-                </div>
-            `).join('');
-            
-            // 重新绑定拖拽事件
-            container.querySelectorAll('.field-item').forEach(item => {
-                item.addEventListener('dragstart', this.handleDragStart.bind(this));
-                item.addEventListener('dragend', this.handleDragEnd.bind(this));
-            });
-        };
-
-        renderFilteredFields();
-        
-        // 搜索功能
-        searchInput.addEventListener('input', (e) => {
-            renderFilteredFields(e.target.value);
-        });
-    },
-
-    // 渲染图表类型
-    renderChartTypes() {
-        const types = document.querySelectorAll('.chart-type-item');
-        types.forEach(item => {
-            item.addEventListener('click', () => {
-                types.forEach(t => t.classList.remove('active'));
-                item.classList.add('active');
-                this.currentConfig.type = item.dataset.type;
-                this.updateSeriesVisibility();
-                this.refreshPreview();
-            });
-        });
-        
-        // 默认选中柱状图
-        types[0]?.classList.add('active');
-    },
-
-    // 初始化拖拽功能
-    initDragAndDrop() {
-        const dropZones = document.querySelectorAll('.drop-zone');
-        
-        dropZones.forEach(zone => {
-            zone.addEventListener('dragover', this.handleDragOver.bind(this));
-            zone.addEventListener('dragleave', this.handleDragLeave.bind(this));
-            zone.addEventListener('drop', this.handleDrop.bind(this));
-        });
-    },
-
-    // 拖拽开始
-    handleDragStart(e) {
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', e.target.dataset.field);
-        e.target.classList.add('dragging');
-    },
-
-    // 拖拽结束
-    handleDragEnd(e) {
-        e.target.classList.remove('dragging');
-    },
-
-    // 拖拽悬停
-    handleDragOver(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        const dropZone = e.currentTarget;
-        dropZone.classList.add('drag-over');
-    },
-
-    // 拖拽离开
-    handleDragLeave(e) {
-        e.currentTarget.classList.remove('drag-over');
-    },
-
-    // 拖拽放下
-    handleDrop(e) {
-        e.preventDefault();
-        e.currentTarget.classList.remove('drag-over');
-        
-        const fieldName = e.dataTransfer.getData('text/plain');
-        const dropZone = e.currentTarget;
-        const axis = dropZone.dataset.axis;
-        
-        this.addFieldToAxis(axis, fieldName);
-        this.refreshPreview();
-    },
-
-    // 添加字段到轴
-    addFieldToAxis(axis, fieldName) {
-        const content = document.querySelector(`#drop-${axis}-axis .drop-zone-content`);
-        
-        // 清空当前内容(单选模式)
-        content.innerHTML = '';
-        
-        // 添加新字段
-        const fieldDiv = document.createElement('div');
-        fieldDiv.className = 'dropped-field';
-        fieldDiv.innerHTML = `
-            <span>${fieldName}</span>
-            <button class="remove-btn" onclick="ChartDesigner.removeField('${axis}')">×</button>
-        `;
-        content.appendChild(fieldDiv);
-        
-        // 更新配置
-        if (axis === 'x') {
-            this.currentConfig.xAxis = fieldName;
-        } else if (axis === 'y') {
-            this.currentConfig.yAxis = fieldName;
-        } else if (axis === 'series') {
-            this.currentConfig.series = fieldName;
-        }
-    },
-
-    // 移除字段
-    removeField(axis) {
-        const content = document.querySelector(`#drop-${axis}-axis .drop-zone-content`);
-        content.innerHTML = '';
-        
-        if (axis === 'x') {
-            this.currentConfig.xAxis = null;
-        } else if (axis === 'y') {
-            this.currentConfig.yAxis = null;
-        } else if (axis === 'series') {
-            this.currentConfig.series = null;
-        }
-        
-        this.refreshPreview();
-    },
-
-    // 初始化事件监听
-    initEventListeners() {
-        // 图表标题
-        const titleInput = document.getElementById('chart-title');
-        if (titleInput) {
-            titleInput.addEventListener('input', (e) => {
-                this.currentConfig.title = e.target.value;
-                this.refreshPreview();
-            });
-        }
-
-        // 主题选择
-        const themeSelect = document.getElementById('chart-theme-select');
-        if (themeSelect) {
-            themeSelect.addEventListener('change', (e) => {
-                this.currentConfig.theme = e.target.value;
-                this.refreshPreview();
-            });
-        }
-
-        // 多系列开关
-        const seriesCheckbox = document.getElementById('enable-series');
-        if (seriesCheckbox) {
-            seriesCheckbox.addEventListener('change', (e) => {
-                this.currentConfig.enableSeries = e.target.checked;
-                this.updateSeriesVisibility();
-                this.refreshPreview();
-            });
-        }
-
-        // 聚合方式
-        const aggSelect = document.getElementById('aggregation-method');
-        if (aggSelect) {
-            aggSelect.addEventListener('change', (e) => {
-                this.currentConfig.aggregation = e.target.value;
-                this.refreshPreview();
-            });
-        }
-
-        // 数据限制
-        const limitInput = document.getElementById('data-limit');
-        if (limitInput) {
-            limitInput.addEventListener('change', (e) => {
-                this.currentConfig.limit = parseInt(e.target.value) || 0;
-                this.refreshPreview();
-            });
-        }
-
-        // 排序
-        const sortSelect = document.getElementById('sort-order');
-        if (sortSelect) {
-            sortSelect.addEventListener('change', (e) => {
-                this.currentConfig.sortOrder = e.target.value;
-                this.refreshPreview();
-            });
-        }
-    },
-
-    // 更新系列配置可见性
-    updateSeriesVisibility() {
-        const seriesConfig = document.getElementById('series-config');
-        const seriesZone = document.getElementById('drop-series');
-        
-        // 只有特定图表类型支持多系列
-        const supportsSeries = ['bar', 'line', 'scatter'].includes(this.currentConfig.type);
-        
-        if (supportsSeries) {
-            seriesConfig.style.display = 'block';
-            if (this.currentConfig.enableSeries) {
-                seriesZone.style.display = 'flex';
-            } else {
-                seriesZone.style.display = 'none';
-                this.currentConfig.series = null;
-            }
-        } else {
-            seriesConfig.style.display = 'none';
-            seriesZone.style.display = 'none';
-            this.currentConfig.series = null;
-            this.currentConfig.enableSeries = false;
-        }
-    },
-
-    // 添加过滤条件
-    addFilter() {
-        this.filters.push({
-            field: this.currentFields[0] || '',
-            operator: 'contains',
-            value: ''
-        });
-        this.renderFilters();
-    },
-
-    // 渲染过滤条件
-    renderFilters() {
-        const container = document.getElementById('filter-list');
-        
-        if (!container) {
-            console.error('过滤器容器未找到');
-            return;
-        }
-        
-        container.innerHTML = this.filters.map((filter, index) => `
-            <div class="filter-item">
-                <div class="filter-row">
-                    <select onchange="ChartDesigner.updateFilter(${index}, 'field', this.value)">
-                        ${this.currentFields.map(field => 
-                            `<option value="${field}" ${filter.field === field ? 'selected' : ''}>${field}</option>`
-                        ).join('')}
-                    </select>
-                    <button class="filter-remove-btn" onclick="ChartDesigner.removeFilter(${index})">×</button>
-                </div>
-                <div class="filter-row">
-                    <select onchange="ChartDesigner.updateFilter(${index}, 'operator', this.value)">
-                        <option value="contains" ${filter.operator === 'contains' ? 'selected' : ''}>包含</option>
-                        <option value="equals" ${filter.operator === 'equals' ? 'selected' : ''}>等於</option>
-                        <option value="gt" ${filter.operator === 'gt' ? 'selected' : ''}>大於</option>
-                        <option value="lt" ${filter.operator === 'lt' ? 'selected' : ''}>小於</option>
-                        <option value="gte" ${filter.operator === 'gte' ? 'selected' : ''}>大於等於</option>
-                        <option value="lte" ${filter.operator === 'lte' ? 'selected' : ''}>小於等於</option>
-                    </select>
-                    <input type="text" value="${filter.value}" 
-                           onchange="ChartDesigner.updateFilter(${index}, 'value', this.value)"
-                           placeholder="篩選值" />
-                </div>
-            </div>
-        `).join('');
-    },
-
-    // 更新过滤条件
-    updateFilter(index, key, value) {
-        this.filters[index][key] = value;
-        this.refreshPreview();
-    },
-
-    // 移除过滤条件
-    removeFilter(index) {
-        this.filters.splice(index, 1);
-        this.renderFilters();
-        this.refreshPreview();
-    },
-
-    // 应用过滤条件
-    applyFilters(data) {
-        return data.filter(item => {
-            return this.filters.every(filter => {
-                const fieldValue = String(item[filter.field] || '');
-                const filterValue = String(filter.value);
-
-                switch (filter.operator) {
-                    case 'contains':
-                        return fieldValue.toLowerCase().includes(filterValue.toLowerCase());
-                    case 'equals':
-                        return fieldValue === filterValue;
-                    case 'gt':
-                        return parseFloat(fieldValue) > parseFloat(filterValue);
-                    case 'lt':
-                        return parseFloat(fieldValue) < parseFloat(filterValue);
-                    case 'gte':
-                        return parseFloat(fieldValue) >= parseFloat(filterValue);
-                    case 'lte':
-                        return parseFloat(fieldValue) <= parseFloat(filterValue);
-                    default:
-                        return true;
-                }
-            });
-        });
-    },
-
-    // 刷新预览
-    refreshPreview() {
-        const container = document.getElementById('chart-preview');
-        
-        if (!container) {
-            console.error('预览容器未找到');
-            return;
-        }
-        
-        // 销毁旧图表
-        if (this.previewChart) {
-            this.previewChart.dispose();
-        }
-
-        // 检查必要字段
-        if (!this.currentConfig.xAxis || !this.currentConfig.yAxis) {
-            container.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;flex-direction:column;gap:12px;">
-                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                    </svg>
-                    <div>請拖拽字段到 X軸 和 Y軸 區域開始設計</div>
-                </div>
-            `;
-            return;
-        }
-
-        // 应用过滤
-        let filteredData = this.applyFilters(this.currentData);
-
-        // 更新统计信息
-        const dataCountEl = document.getElementById('preview-data-count');
-        const filteredCountEl = document.getElementById('preview-filtered-count');
-        
-        if (dataCountEl) {
-            dataCountEl.textContent = `數據: ${filteredData.length} 項`;
-        }
-        
-        if (filteredCountEl) {
-            if (this.filters.length > 0) {
-                filteredCountEl.textContent = 
-                    `(已篩選 ${this.currentData.length - filteredData.length} 項)`;
-            } else {
-                filteredCountEl.textContent = '';
-            }
-        }
-
-        // 准备图表数据
-        const chartData = this.prepareChartData(filteredData);
-        
-        // 创建图表
-        this.previewChart = echarts.init(container, this.currentConfig.theme);
-        const option = this.generateChartOption(chartData);
-        this.previewChart.setOption(option);
-
-        // 响应式
-        const resizeHandler = () => {
-            if (this.previewChart) {
-                this.previewChart.resize();
-            }
-        };
-        
-        // 移除旧的监听器
-        window.removeEventListener('resize', this.resizeHandler);
-        this.resizeHandler = resizeHandler;
-        window.addEventListener('resize', this.resizeHandler);
-    },
-
-    // 准备图表数据
-    prepareChartData(data) {
-        const xField = this.currentConfig.xAxis;
-        const yField = this.currentConfig.yAxis;
-        const seriesField = this.currentConfig.series;
-        const aggregation = this.currentConfig.aggregation;
-
-        if (this.currentConfig.enableSeries && seriesField) {
-            // 多系列数据
-            const seriesMap = new Map();
-            const allLabels = new Set();
-
-            data.forEach(item => {
-                const label = item[xField] || 'Unknown';
-                const value = parseFloat(item[yField]) || 0;
-                const series = item[seriesField] || 'Default';
-
-                allLabels.add(label);
-
-                if (!seriesMap.has(series)) {
-                    seriesMap.set(series, new Map());
-                }
-
-                const currentMap = seriesMap.get(series);
-                if (currentMap.has(label)) {
-                    const existing = currentMap.get(label);
-                    currentMap.set(label, this.aggregate(existing, value, aggregation));
-                } else {
-                    currentMap.set(label, { value, count: 1 });
-                }
-            });
-
-            let labels = Array.from(allLabels);
-            const series = [];
-
-            seriesMap.forEach((labelMap, seriesName) => {
-                series.push({
-                    name: seriesName,
-                    data: labels.map(label => {
-                        const item = labelMap.get(label);
-                        return item ? this.getFinalValue(item, aggregation) : 0;
-                    })
-                });
-            });
-
-            // 排序和限制
-            const result = this.applySortAndLimit({ labels, values: series[0]?.data || [], isSeries: true, series });
-            return result;
-        } else {
-            // 单系列数据
-            const dataMap = new Map();
-
-            data.forEach(item => {
-                const label = item[xField] || 'Unknown';
-                const value = parseFloat(item[yField]) || 0;
-
-                if (dataMap.has(label)) {
-                    const existing = dataMap.get(label);
-                    dataMap.set(label, this.aggregate(existing, value, aggregation));
-                } else {
-                    dataMap.set(label, { value, count: 1 });
-                }
-            });
-
-            let labels = Array.from(dataMap.keys());
-            let values = labels.map(label => this.getFinalValue(dataMap.get(label), aggregation));
-
-            // 排序和限制
-            const result = this.applySortAndLimit({ labels, values, isSeries: false });
-            return result;
-        }
-    },
-
-    // 聚合数据
-    aggregate(existing, newValue, method) {
-        switch (method) {
-            case 'sum':
-                return { value: existing.value + newValue, count: existing.count + 1 };
-            case 'avg':
-                return { value: existing.value + newValue, count: existing.count + 1 };
-            case 'count':
-                return { value: existing.value, count: existing.count + 1 };
-            case 'max':
-                return { value: Math.max(existing.value, newValue), count: existing.count + 1 };
-            case 'min':
-                return { value: Math.min(existing.value, newValue), count: existing.count + 1 };
-            default:
-                return existing;
-        }
-    },
-
-    // 获取最终值
-    getFinalValue(item, method) {
-        if (method === 'avg') {
-            return item.value / item.count;
-        } else if (method === 'count') {
-            return item.count;
-        }
-        return item.value;
-    },
-
-    // 应用排序和限制
-    applySortAndLimit(chartData) {
-        const { labels, values, isSeries, series } = chartData;
-
-        // 创建索引数组
-        let indices = labels.map((_, i) => i);
-
-        // 排序
-        if (this.currentConfig.sortOrder !== 'none') {
-            indices.sort((a, b) => {
-                const valueA = isSeries ? series[0].data[a] : values[a];
-                const valueB = isSeries ? series[0].data[b] : values[b];
-                return this.currentConfig.sortOrder === 'asc' ? valueA - valueB : valueB - valueA;
-            });
-        }
-
-        // 限制
-        if (this.currentConfig.limit > 0) {
-            indices = indices.slice(0, this.currentConfig.limit);
-        }
-
-        // 重新排列
-        const newLabels = indices.map(i => labels[i]);
-        
-        if (isSeries) {
-            const newSeries = series.map(s => ({
-                name: s.name,
-                data: indices.map(i => s.data[i])
-            }));
-            return { labels: newLabels, isSeries: true, series: newSeries };
-        } else {
-            const newValues = indices.map(i => values[i]);
-            return { labels: newLabels, values: newValues, isSeries: false };
-        }
-    },
-
-    // 生成图表配置
-    generateChartOption(chartData) {
-        const isDark = STATE.theme.dark;
-        const textColor = isDark ? '#e0e0e0' : '#333';
-
-        const baseOption = {
-            title: {
-                text: this.currentConfig.title || '數據圖表',
-                left: 'center',
-                textStyle: { color: textColor, fontSize: 16, fontWeight: 600 }
-            },
-            tooltip: {
-                trigger: 'item',
-                backgroundColor: isDark ? 'rgba(50,50,50,0.9)' : 'rgba(255,255,255,0.9)',
-                textStyle: { color: textColor }
-            },
-            legend: {
-                show: chartData.isSeries,
-                top: 'bottom',
-                textStyle: { color: textColor }
-            }
-        };
-
-        const type = this.currentConfig.type;
-
-        switch (type) {
-            case 'bar':
-            case 'line':
-                return {
-                    ...baseOption,
-                    grid: { left: '3%', right: '4%', bottom: chartData.isSeries ? '20%' : '10%', top: '15%', containLabel: true },
-                    xAxis: {
-                        type: 'category',
-                        data: chartData.labels,
-                        axisLabel: { color: textColor, rotate: chartData.labels.length > 8 ? 45 : 0 }
-                    },
-                    yAxis: {
-                        type: 'value',
-                        axisLabel: { color: textColor }
-                    },
-                    series: chartData.isSeries
-                        ? chartData.series.map(s => ({ name: s.name, type: type, data: s.data, smooth: type === 'line' }))
-                        : [{ type: type, data: chartData.values, smooth: type === 'line' }]
-                };
-
-            case 'pie':
-                return {
-                    ...baseOption,
-                    series: [{
-                        type: 'pie',
-                        radius: ['40%', '70%'],
-                        center: ['50%', '55%'],
-                        data: chartData.labels.map((label, idx) => ({
-                            name: label,
-                            value: chartData.values[idx]
-                        })),
-                        label: { color: textColor }
-                    }]
-                };
-
-            case 'scatter':
-                return {
-                    ...baseOption,
-                    grid: { left: '3%', right: '4%', bottom: '10%', top: '15%', containLabel: true },
-                    xAxis: { type: 'category', data: chartData.labels, axisLabel: { color: textColor } },
-                    yAxis: { type: 'value', axisLabel: { color: textColor } },
-                    series: chartData.isSeries
-                        ? chartData.series.map(s => ({
-                            name: s.name,
-                            type: 'scatter',
-                            data: s.data.map((val, idx) => [chartData.labels[idx], val]),
-                            symbolSize: 12
-                        }))
-                        : [{
-                            type: 'scatter',
-                            data: chartData.values.map((val, idx) => [chartData.labels[idx], val]),
-                            symbolSize: 12
-                        }]
-                };
-
-            case 'radar':
-                return {
-                    ...baseOption,
-                    radar: {
-                        indicator: chartData.labels.map(label => ({ name: label })),
-                        axisName: { color: textColor }
-                    },
-                    series: [{
-                        type: 'radar',
-                        data: [{ value: chartData.values, name: this.currentConfig.title || 'Data' }]
-                    }]
-                };
-
-            case 'funnel':
-                return {
-                    ...baseOption,
-                    series: [{
-                        type: 'funnel',
-                        left: '10%',
-                        width: '80%',
-                        data: chartData.labels.map((label, idx) => ({
-                            name: label,
-                            value: chartData.values[idx]
-                        })).sort((a, b) => b.value - a.value),
-                        label: { color: textColor }
-                    }]
-                };
-
-            default:
-                return baseOption;
-        }
-    },
-
-    // 更新数据预览
-    updateDataPreview() {
-        const container = document.getElementById('data-preview');
-        const countSpan = document.getElementById('data-count');
-        
-        if (!container || !countSpan) {
-            console.error('数据预览容器未找到');
-            return;
-        }
-        
-        countSpan.textContent = `${this.currentData.length} 條記錄`;
-        
-        // 只显示前100条
-        const previewData = this.currentData.slice(0, 100);
-        const columns = this.currentFields;
-        
-        const html = `
-            <table class="detail-table" style="font-size: 11px;">
-                <thead>
-                    <tr>${columns.map(col => `<th>${col}</th>`).join('')}</tr>
-                </thead>
-                <tbody>
-                    ${previewData.map(row => `
-                        <tr>${columns.map(col => `<td>${row[col] || ''}</td>`).join('')}</tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-        
-        container.innerHTML = html;
-    },
-
-    // 导出图表
-    exportChart() {
-        if (!this.previewChart) {
-            alert('請先設計圖表');
-            return;
-        }
-
-        const url = this.previewChart.getDataURL({
-            type: 'png',
-            pixelRatio: 2,
-            backgroundColor: '#fff'
-        });
-
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `chart_${Date.now()}.png`;
-        link.click();
-    },
-
-    // 复制配置
-    copyConfig() {
-        const config = JSON.stringify({
-            type: this.currentConfig.type,
-            title: this.currentConfig.title,
-            theme: this.currentConfig.theme,
-            xAxis: this.currentConfig.xAxis,
-            yAxis: this.currentConfig.yAxis,
-            series: this.currentConfig.series,
-            enableSeries: this.currentConfig.enableSeries,
-            aggregation: this.currentConfig.aggregation,
-            limit: this.currentConfig.limit,
-            sortOrder: this.currentConfig.sortOrder,
-            filters: this.filters
-        }, null, 2);
-
-        navigator.clipboard.writeText(config).then(() => {
-            alert('配置已複製到剪貼板!');
-        }).catch(() => {
-            alert('複製失敗');
-        });
-    },
-
-    // 保存为模板
-    saveAsTemplate() {
-        const name = prompt('請輸入模板名稱:');
-        if (!name) return;
-
-        const template = {
-            name,
-            config: { ...this.currentConfig },
-            filters: [...this.filters]
-        };
-
-        const templates = JSON.parse(localStorage.getItem('chart-templates') || '[]');
-        templates.push(template);
-        localStorage.setItem('chart-templates', JSON.stringify(templates));
-
-        alert('模板已保存!');
-    },
-
-    // 加载模板
-    loadTemplate() {
-        const templates = JSON.parse(localStorage.getItem('chart-templates') || '[]');
-        
-        if (templates.length === 0) {
-            alert('暫無已保存的模板');
-            return;
-        }
-
-        const options = templates.map((t, i) => `${i + 1}. ${t.name}`).join('\n');
-        const choice = prompt(`選擇要加載的模板:\n${options}\n\n輸入序號:`);
-        
-        if (!choice) return;
-
-        const index = parseInt(choice) - 1;
-        if (index < 0 || index >= templates.length) {
-            alert('無效的選擇');
-            return;
-        }
-
-        const template = templates[index];
-        this.currentConfig = { ...template.config };
-        this.filters = [...template.filters];
-
-        // 更新UI
-        document.getElementById('chart-title').value = this.currentConfig.title || '';
-        document.getElementById('chart-theme-select').value = this.currentConfig.theme;
-        document.getElementById('enable-series').checked = this.currentConfig.enableSeries;
-        document.getElementById('aggregation-method').value = this.currentConfig.aggregation;
-        document.getElementById('data-limit').value = this.currentConfig.limit;
-        document.getElementById('sort-order').value = this.currentConfig.sortOrder;
-
-        // 更新拖放区域
-        if (this.currentConfig.xAxis) {
-            this.addFieldToAxis('x', this.currentConfig.xAxis);
-        }
-        if (this.currentConfig.yAxis) {
-            this.addFieldToAxis('y', this.currentConfig.yAxis);
-        }
-        if (this.currentConfig.series) {
-            this.addFieldToAxis('series', this.currentConfig.series);
-        }
-
-        this.renderFilters();
-        this.updateSeriesVisibility();
-        this.refreshPreview();
-
-        alert('模板已加載!');
-    },
-
-    // 保存图表配置
-    async saveChart() {
-        if (!this.currentConfig.xAxis || !this.currentConfig.yAxis) {
-            alert('請至少設置 X軸 和 Y軸');
-            return;
-        }
-
-        const config = {
-            tabId: this.currentTabId,
-            type: this.currentConfig.type,
-            title: this.currentConfig.title || '自定義圖表',
-            theme: this.currentConfig.theme,
-            labelColumn: this.currentConfig.xAxis,
-            dataColumn: this.currentConfig.yAxis,
-            seriesColumn: this.currentConfig.enableSeries ? this.currentConfig.series : null,
-            aggregation: this.currentConfig.aggregation,
-            limit: this.currentConfig.limit,
-            sortOrder: this.currentConfig.sortOrder,
-            filters: this.filters,
-            order: 999 // 放在最后
-        };
-
-        console.log('保存圖表配置:', config);
-        
-        // 这里可以调用API保存配置
-        try {
-            const response = await fetch('/api/save-chart-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
-            });
-
-            if (response.ok) {
-                alert('圖表配置已保存!刷新頁面後生效');
-                this.close();
-            } else {
-                alert('保存失敗');
-            }
-        } catch (error) {
-            console.error('保存失敗:', error);
-            alert('保存失敗:' + error.message);
-        }
-    },
-
-    // 重置设计器
-    reset() {
-        if (!confirm('確定要重置所有設置嗎?')) return;
-
-        this.currentConfig = {
-            type: 'bar',
-            title: '',
-            theme: 'default',
-            xAxis: null,
-            yAxis: null,
-            series: null,
-            enableSeries: false,
-            aggregation: 'sum',
-            limit: 0,
-            sortOrder: 'none'
-        };
-
-        this.filters = [];
-
-        document.getElementById('chart-title').value = '';
-        document.getElementById('chart-theme-select').value = 'default';
-        document.getElementById('enable-series').checked = false;
-        document.getElementById('aggregation-method').value = 'sum';
-        document.getElementById('data-limit').value = 0;
-        document.getElementById('sort-order').value = 'none';
-
-        document.querySelectorAll('.drop-zone-content').forEach(content => {
-            content.innerHTML = '';
-        });
-
-        document.querySelectorAll('.chart-type-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        document.querySelector('.chart-type-item[data-type="bar"]')?.classList.add('active');
-
-        this.renderFilters();
-        this.updateSeriesVisibility();
-        this.refreshPreview();
-    },
-
-    // 关闭设计器
-    close() {
-        if (this.previewChart) {
-            this.previewChart.dispose();
-            this.previewChart = null;
-        }
-        
-        document.getElementById('chart-designer-modal').style.display = 'none';
-    }
-};
-
-// 旧版图表设计器兼容性
-window.openChartDesigner = function() {
-    const tabId = STATE.currentTab;
-    ChartDesigner.open(tabId);
-};
-
-window.closeChartDesigner = function() {
-    ChartDesigner.close();
-};	
-
-
-window.renderChartList = function () {
-  const container = document.getElementById('chart-list');
-  const charts = STATE.userCharts || [];
-
-  container.innerHTML = charts.map((chart, idx) => `
-    <div class="chart-item" data-index="${idx}">
-      <input type="text" placeholder="图表标题" value="${chart.title || ''}" onchange="updateChart(${idx}, 'title', this.value)">
-      <select onchange="updateChart(${idx}, 'type', this.value)">
-        <option value="bar" ${chart.type === 'bar' ? 'selected' : ''}>柱状图</option>
-        <option value="line" ${chart.type === 'line' ? 'selected' : ''}>折线图</option>
-        <option value="pie" ${chart.type === 'pie' ? 'selected' : ''}>饼图</option>
-      </select>
-      <select onchange="updateChart(${idx}, 'labelColumn', this.value)">
-        <option value="">选择X轴字段</option>
-        ${STATE.chartDesignerSchema.map(key => `<option ${chart.labelColumn === key ? 'selected' : ''}>${key}</option>`).join('')}
-      </select>
-      <select onchange="updateChart(${idx}, 'dataColumn', this.value)">
-        <option value="">选择Y轴字段</option>
-        ${STATE.chartDesignerSchema.map(key => `<option ${chart.dataColumn === key ? 'selected' : ''}>${key}</option>`).join('')}
-      </select>
-      <select class="chart-width-select" onchange="updateChart(${idx}, 'width', this.value)">
-        <option value="50" ${chart.width === '50' ? 'selected' : ''}>50%宽</option>
-        <option value="100" ${chart.width === '100' ? 'selected' : ''}>100%宽</option>
-      </select>
-      <button class="secondary-btn" onclick="removeChart(${idx})">删除</button>
-    </div>
-  `).join('');
-};
-
-window.addNewChart = function () {
-  STATE.userCharts = STATE.userCharts || [];
-  STATE.userCharts.push({
-    title: '新图表',
-    type: 'bar',
-    labelColumn: '',
-    dataColumn: '',
-    width: '50'
-  });
-  renderChartList();
-};
-
-window.updateChart = function (idx, key, value) {
-  STATE.userCharts[idx][key] = value;
-};
-
-window.removeChart = function (idx) {
-  if (confirm('确定删除这个图表吗？')) {
-    STATE.userCharts.splice(idx, 1);
-    renderChartList();
-  }
-};
-
-window.saveChartConfig = async function () {
-  const tabId = STATE.currentTab;
-  const payload = {
-    tabId,
-    charts: STATE.userCharts
-  };
-
-  try {
-    const res = await fetch('/api/charts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
-      alert('图表配置已保存');
-      closeChartDesigner();
-    } else {
-      alert('保存失败：' + res.statusText);
-    }
-  } catch (err) {
-    alert('网络错误：' + err.message);
-  }
 };
 
 // ==================== 会话管理器 ====================
@@ -4596,6 +3559,2130 @@ const SessionManager = {
         console.log('🔑 清除用户会话');
     }
 };
+
+// ==================== 完整的智能数据透视分析器 ====================
+const PivotDesigner = {
+    // 状态管理
+    currentTabId: null,
+    rawData: null,
+    fields: [],
+    fieldTypes: {},
+    filterValuesCache: {},
+    
+    // 透视配置
+    config: {
+        filters: [],      // 筛选字段
+        rows: [],         // 行字段
+        columns: [],      // 列字段
+        values: [],       // 数据字段
+        showRowTotals: true,
+        showColTotals: true,
+        showGrandTotal: true,
+        decimalPlaces: 2  // 新增：小数位数设置
+    },
+    
+    // 当前选中的字段
+    selectedField: null,
+    
+    // 图表实例
+    chartInstance: null,
+    chartType: 'bar',
+    
+    // 初始化
+    open(tabId) {
+        this.currentTabId = tabId;
+        console.log('🎯 打开智能透视分析器:', tabId);
+        
+        // 显示模态框
+        const modal = document.getElementById('pivot-designer-modal');
+        if (!modal) {
+            console.error('❌ 透视分析器模态框未找到');
+            alert('透視分析器初始化失敗');
+            return;
+        }
+        
+        modal.style.display = 'flex';
+        
+        // 更新标题
+        const tabName = document.querySelector(`[data-tab="${tabId}"]`)?.textContent || tabId;
+        document.getElementById('pivot-tab-name').textContent = tabName;
+        
+        // 重置状态，确保数据重新加载
+        this.resetState();
+        
+        // 加载数据
+        this.loadData();
+    },
+
+    // 重置状态
+    resetState() {
+        this.rawData = null;
+        this.fields = [];
+        this.fieldTypes = {};
+        this.filterValuesCache = {};
+        
+        // 重置配置
+        this.config = {
+            filters: [],
+            rows: [],
+            columns: [],
+            values: [],
+            showRowTotals: true,
+            showColTotals: true,
+            showGrandTotal: true,
+            decimalPlaces: 2
+        };
+        
+        this.selectedField = null;
+        
+        // 重置UI
+        ['filter', 'row', 'column', 'value'].forEach(zone => {
+            this.renderZone(zone);
+        });
+        
+        // 清空透视表和图表
+        const tableContainer = document.getElementById('pivot-table-preview');
+        const chartContainer = document.getElementById('pivot-chart-preview');
+        if (tableContainer) tableContainer.innerHTML = '';
+        if (chartContainer) chartContainer.innerHTML = '';
+        
+        // 隐藏图表区域
+        const chartSection = document.getElementById('pivot-chart-section');
+        if (chartSection) chartSection.style.display = 'none';
+        
+        console.log('🔄 透视分析器状态已重置');
+    },
+
+    // 加载数据
+    async loadData() {
+        try {
+            const filename = FileNameManager.getFileName(this.currentTabId);
+            console.log('📁 加载数据文件:', filename);
+            
+            const data = await Utils.readJSONFile(filename);
+            const detail = data.detail || [];
+            
+            if (detail.length === 0) {
+                alert('暫無明細數據，無法進行透視分析');
+                this.close();
+                return;
+            }
+            
+            // 使用全部数据
+            this.rawData = detail;
+            console.log('✅ 数据加载成功:', detail.length, '条记录');
+            
+            // 从detail中获取字段
+            this.analyzeFields();
+            
+            // 预加载筛选值数据
+            await this.preloadFilterValues();
+            
+            // 初始化UI
+            this.initUI();
+            
+        } catch (error) {
+            console.error('❌ 加载数据失败:', error);
+            alert('加載數據失敗: ' + error.message);
+            this.close();
+        }
+    },
+
+    // 分析字段类型
+    analyzeFields() {
+        if (!this.rawData || this.rawData.length === 0) return;
+        
+        const sample = this.rawData[0];
+        this.fields = Object.keys(sample);
+        this.fieldTypes = {};
+        
+        this.fields.forEach(field => {
+            const values = this.rawData.slice(0, 100).map(row => row[field]);
+            const type = this.detectFieldType(values);
+            this.fieldTypes[field] = type;
+        });
+        
+        console.log('📊 字段分析完成:', this.fieldTypes);
+    },
+
+    // 检测字段类型
+    detectFieldType(values) {
+        const nonNullValues = values.filter(v => v !== null && v !== undefined && v !== '');
+        
+        if (nonNullValues.length === 0) return 'text';
+        
+        // 检查是否为日期
+        const datePattern = /^\d{4}-\d{2}-\d{2}/;
+        if (nonNullValues.some(v => datePattern.test(String(v)))) {
+            return 'date';
+        }
+        
+        // 检查是否为数字
+        const numericCount = nonNullValues.filter(v => !isNaN(parseFloat(v))).length;
+        if (numericCount / nonNullValues.length > 0.8) {
+            return 'number';
+        }
+        
+        // 检查是否为布尔
+        const uniqueValues = [...new Set(nonNullValues.map(v => String(v).toLowerCase()))];
+        if (uniqueValues.length <= 2 && uniqueValues.every(v => ['true', 'false', '是', '否', 'yes', 'no', '0', '1'].includes(v))) {
+            return 'boolean';
+        }
+        
+        return 'text';
+    },
+
+    // 预加载筛选值数据
+    async preloadFilterValues() {
+        if (!this.rawData || this.rawData.length === 0) return;
+        
+        this.filterValuesCache = {};
+        
+        // 为每个字段预加载唯一值（用于筛选器）
+        this.fields.forEach(field => {
+            const uniqueValues = [...new Set(this.rawData.map(row => row[field]))]
+                .filter(value => value !== null && value !== undefined && value !== '')
+                .sort();
+            
+            this.filterValuesCache[field] = uniqueValues.slice(0, 1000); // 限制数量避免性能问题
+        });
+        
+        console.log('📊 筛选值预加载完成');
+    },
+
+    // 初始化UI
+    initUI() {
+        // 渲染字段列表
+        this.renderFieldsList();
+        
+        // 初始化拖拽功能
+        this.initDragDrop();
+        
+        // 初始化事件监听
+        this.initEventListeners();
+        
+        // 初始化图表类型选择器
+        this.initChartTypeSelector();
+        
+        console.log('✅ UI初始化完成');
+    },
+
+    // 渲染字段列表
+    renderFieldsList() {
+        const container = document.getElementById('pivot-available-fields');
+        const searchInput = document.getElementById('pivot-field-search');
+        
+        if (!container || !searchInput) {
+            console.error('❌ 字段列表容器未找到');
+            return;
+        }
+        
+        const renderFields = (filter = '') => {
+            const filtered = this.fields.filter(field => 
+                field.toLowerCase().includes(filter.toLowerCase())
+            );
+            
+            container.innerHTML = filtered.map(field => {
+                const type = this.fieldTypes[field];
+                const icon = this.getFieldTypeIcon(type);
+                
+                return `
+                    <div class="pivot-field-item" draggable="true" data-field="${field}" data-type="${type}">
+                        ${icon}
+                        <span>${field}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            // 重新绑定拖拽事件
+            container.querySelectorAll('.pivot-field-item').forEach(item => {
+                item.addEventListener('dragstart', this.handleDragStart.bind(this));
+                item.addEventListener('dragend', this.handleDragEnd.bind(this));
+            });
+        };
+        
+        renderFields();
+        
+        // 搜索功能
+        searchInput.addEventListener('input', (e) => {
+            renderFields(e.target.value);
+        });
+    },
+
+    // 获取字段类型图标
+    getFieldTypeIcon(type) {
+        const icons = {
+            text: '<svg class="field-type-icon text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>',
+            number: '<svg class="field-type-icon number" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M6 20V4m12 16v-6"/></svg>',
+            date: '<svg class="field-type-icon date" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+            boolean: '<svg class="field-type-icon boolean" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
+        };
+        return icons[type] || icons.text;
+    },
+
+    // 初始化拖拽功能
+    initDragDrop() {
+        const zones = document.querySelectorAll('.pivot-zone');
+        
+        zones.forEach(zone => {
+            zone.addEventListener('dragover', this.handleDragOver.bind(this));
+            zone.addEventListener('dragleave', this.handleDragLeave.bind(this));
+            zone.addEventListener('drop', this.handleDrop.bind(this));
+        });
+    },
+
+    // 拖拽开始
+    handleDragStart(e) {
+        const fieldItem = e.target.closest('.pivot-field-item');
+        if (!fieldItem) return;
+        
+        const field = fieldItem.dataset.field;
+        const type = fieldItem.dataset.type;
+        
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('application/json', JSON.stringify({ field, type }));
+        
+        fieldItem.classList.add('dragging');
+        
+        console.log('🎯 开始拖拽字段:', field, type);
+    },
+
+    // 拖拽结束
+    handleDragEnd(e) {
+        const fieldItem = e.target.closest('.pivot-field-item');
+        if (fieldItem) {
+            fieldItem.classList.remove('dragging');
+        }
+    },
+
+    // 拖拽悬停
+    handleDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        
+        const zone = e.currentTarget;
+        zone.classList.add('drag-over');
+    },
+
+    // 拖拽离开
+    handleDragLeave(e) {
+        const zone = e.currentTarget;
+        zone.classList.remove('drag-over');
+    },
+
+    // 拖拽放下
+    handleDrop(e) {
+        e.preventDefault();
+        
+        const zone = e.currentTarget;
+        zone.classList.remove('drag-over');
+        
+        try {
+            const data = JSON.parse(e.dataTransfer.getData('application/json'));
+            const zoneName = zone.dataset.zone;
+            
+            console.log('📍 字段放置到区域:', data.field, '->', zoneName);
+            
+            this.addFieldToZone(zoneName, data.field, data.type);
+            
+        } catch (error) {
+            console.error('❌ 处理拖放失败:', error);
+        }
+    },
+
+    // 添加字段到区域
+    addFieldToZone(zoneName, fieldName, fieldType) {
+        // 获取对应的配置数组
+        let configArray;
+        switch (zoneName) {
+            case 'filter':
+                configArray = this.config.filters;
+                break;
+            case 'row':
+                configArray = this.config.rows;
+                break;
+            case 'column':
+                configArray = this.config.columns;
+                break;
+            case 'value':
+                configArray = this.config.values;
+                break;
+            default:
+                console.error('❌ 未知的区域:', zoneName);
+                return;
+        }
+        
+        // 检查是否已存在
+        const exists = configArray.some(item => item.field === fieldName);
+        if (exists) {
+            console.log('⚠️ 字段已存在于该区域:', fieldName);
+            return;
+        }
+        
+        // 创建字段配置
+        const fieldConfig = {
+            field: fieldName,
+            type: fieldType,
+            displayName: fieldName
+        };
+        
+        // 为筛选字段添加筛选配置
+        if (zoneName === 'filter') {
+            fieldConfig.filterType = 'multiple'; // multiple, range, search
+            fieldConfig.selectedValues = [];
+            fieldConfig.enabled = true;
+        }
+        
+        // 为数值字段添加默认聚合函数
+        if (zoneName === 'value') {
+            fieldConfig.aggregation = fieldType === 'number' ? 'sum' : 'count';
+        }
+        
+        // 为日期字段添加默认维度
+        if (fieldType === 'date' && (zoneName === 'row' || zoneName === 'column')) {
+            fieldConfig.dateDimension = 'month';
+        }
+        
+        // 添加到配置
+        configArray.push(fieldConfig);
+        
+        // 更新UI
+        this.renderZone(zoneName);
+        
+        // 如果是筛选字段，自动打开筛选设置
+        if (zoneName === 'filter') {
+            this.selectField(zoneName, configArray.length - 1);
+        }
+        
+        // 刷新透视表
+        this.refreshPivotTable();
+    },
+
+    // 渲染区域
+    renderZone(zoneName) {
+        const zone = document.querySelector(`[data-zone="${zoneName}"]`);
+        if (!zone) return;
+        
+        let configArray;
+        switch (zoneName) {
+            case 'filter':
+                configArray = this.config.filters;
+                break;
+            case 'row':
+                configArray = this.config.rows;
+                break;
+            case 'column':
+                configArray = this.config.columns;
+                break;
+            case 'value':
+                configArray = this.config.values;
+                break;
+        }
+        
+        zone.innerHTML = configArray.map((item, index) => {
+            const functionLabel = item.aggregation ? `(${this.getAggregationLabel(item.aggregation)})` : '';
+            const dimensionLabel = item.dateDimension ? `[${this.getDateDimensionLabel(item.dateDimension)}]` : '';
+            
+            return `
+                <div class="pivot-field-tag" data-zone="${zoneName}" data-index="${index}" onclick="PivotDesigner.selectField('${zoneName}', ${index})">
+                    <span class="field-label">
+                        ${item.displayName}
+                        ${dimensionLabel}
+                        ${functionLabel ? `<span class="field-function">${functionLabel}</span>` : ''}
+                    </span>
+                    <span class="remove-field" onclick="event.stopPropagation(); PivotDesigner.removeField('${zoneName}', ${index})">×</span>
+                </div>
+            `;
+        }).join('');
+    },
+
+    // 获取聚合函数标签
+    getAggregationLabel(agg) {
+        const labels = {
+            sum: '求和',
+            count: '计数',
+            distinctCount: '去重计数',
+            avg: '平均',
+            distinctAvg: '去重平均',
+            max: '最大',
+            min: '最小'
+        };
+        return labels[agg] || agg;
+    },
+
+    // 获取日期维度标签
+    getDateDimensionLabel(dimension) {
+        const labels = {
+            day: '天',
+            week: '周',
+            month: '月',
+            quarter: '季',
+            year: '年'
+        };
+        return labels[dimension] || dimension;
+    },
+
+    // 移除字段
+    removeField(zoneName, index) {
+        let configArray;
+        switch (zoneName) {
+            case 'filter':
+                configArray = this.config.filters;
+                break;
+            case 'row':
+                configArray = this.config.rows;
+                break;
+            case 'column':
+                configArray = this.config.columns;
+                break;
+            case 'value':
+                configArray = this.config.values;
+                break;
+        }
+        
+        configArray.splice(index, 1);
+        
+        // 更新UI
+        this.renderZone(zoneName);
+        
+        // 清除字段设置
+        if (this.selectedField && this.selectedField.zone === zoneName && this.selectedField.index === index) {
+            this.selectedField = null;
+            this.renderFieldSettings();
+        }
+        
+        // 刷新透视表
+        this.refreshPivotTable();
+    },
+
+    // 选择字段进行设置
+    selectField(zoneName, index) {
+        this.selectedField = { zone: zoneName, index: index };
+        
+        // 更新视觉状态
+        document.querySelectorAll('.pivot-field-tag').forEach(tag => {
+            tag.classList.remove('active');
+        });
+        
+        const tag = document.querySelector(`[data-zone="${zoneName}"][data-index="${index}"]`);
+        if (tag) {
+            tag.classList.add('active');
+        }
+        
+        // 渲染字段设置
+        this.renderFieldSettings();
+    },
+
+    // 渲染字段设置面板
+    renderFieldSettings() {
+        const container = document.getElementById('pivot-field-settings');
+        
+        if (!this.selectedField) {
+            container.innerHTML = `
+                <h4>🎛️ 字段设置</h4>
+                <div class="field-settings-empty">
+                    <p>点击已拖放的字段进行设置</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const { zone, index } = this.selectedField;
+        let configArray;
+        
+        switch (zone) {
+            case 'filter':
+                configArray = this.config.filters;
+                break;
+            case 'row':
+                configArray = this.config.rows;
+                break;
+            case 'column':
+                configArray = this.config.columns;
+                break;
+            case 'value':
+                configArray = this.config.values;
+                break;
+        }
+        
+        const fieldConfig = configArray[index];
+        if (!fieldConfig) return;
+        
+        container.innerHTML = `
+            <h4>🎛️ ${fieldConfig.field}</h4>
+            <div class="field-setting-form">
+                ${this.renderFieldSettingOptions(zone, fieldConfig)}
+            </div>
+        `;
+        
+        // 绑定事件
+        this.bindFieldSettingEvents(zone, index);
+    },
+
+    // 渲染字段设置选项
+    renderFieldSettingOptions(zone, fieldConfig) {
+        let html = `
+            <div class="setting-group">
+                <label>显示名称</label>
+                <input type="text" id="field-display-name" value="${fieldConfig.displayName || fieldConfig.field}" />
+            </div>
+        `;
+        
+        // 筛选字段的特殊设置
+        if (zone === 'filter') {
+            const uniqueValues = this.filterValuesCache[fieldConfig.field] || [];
+            const selectedValues = fieldConfig.selectedValues || [];
+            
+            html += `
+                <div class="setting-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="filter-enabled" ${fieldConfig.enabled !== false ? 'checked' : ''} />
+                        启用筛选
+                    </label>
+                </div>
+                
+                <div class="setting-group">
+                    <label>筛选方式</label>
+                    <select id="filter-type">
+                        <option value="multiple" ${fieldConfig.filterType === 'multiple' ? 'selected' : ''}>多选</option>
+                        <option value="search" ${fieldConfig.filterType === 'search' ? 'selected' : ''}>搜索</option>
+                        <option value="range" ${fieldConfig.filterType === 'range' ? 'selected' : ''}>范围</option>
+                    </select>
+                </div>
+                
+                <div class="setting-group">
+                    <label>选择值 (${uniqueValues.length} 个选项)</label>
+                    <div class="filter-values-container">
+                        <div class="filter-search">
+                            <input type="text" id="filter-search-input" placeholder="搜索..." 
+                                   onkeyup="PivotDesigner.filterSearchValues('${fieldConfig.field}', this.value)" />
+                            <button onclick="PivotDesigner.selectAllFilterValues('${fieldConfig.field}')">全选</button>
+                            <button onclick="PivotDesigner.clearAllFilterValues('${fieldConfig.field}')">清空</button>
+                        </div>
+                        <div class="filter-values-list" id="filter-values-${fieldConfig.field.replace(/[^a-zA-Z0-9]/g, '_')}">
+            `;
+            
+            // 显示筛选值列表
+            uniqueValues.slice(0, 200).forEach(value => {
+                const isSelected = selectedValues.includes(value);
+                const displayValue = String(value).length > 50 ? String(value).substring(0, 50) + '...' : value;
+                
+                html += `
+                    <label class="filter-value-item">
+                        <input type="checkbox" value="${value}" ${isSelected ? 'checked' : ''} 
+                               onchange="PivotDesigner.toggleFilterValue('${fieldConfig.field}', '${value}', this.checked)" />
+                        ${displayValue}
+                    </label>
+                `;
+            });
+            
+            html += `
+                        </div>
+                        <div class="filter-selected-count">
+                            已选择: ${selectedValues.length} 个值
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 数值字段：聚合方式
+        if (zone === 'value') {
+            html += `
+                <div class="setting-group">
+                    <label>聚合方式</label>
+                    <select id="field-aggregation">
+                        <option value="sum" ${fieldConfig.aggregation === 'sum' ? 'selected' : ''}>求和</option>
+                        <option value="count" ${fieldConfig.aggregation === 'count' ? 'selected' : ''}>计数</option>
+                        <option value="distinctCount" ${fieldConfig.aggregation === 'distinctCount' ? 'selected' : ''}>去重计数</option>
+                        <option value="avg" ${fieldConfig.aggregation === 'avg' ? 'selected' : ''}>平均值</option>
+                        <option value="distinctAvg" ${fieldConfig.aggregation === 'distinctAvg' ? 'selected' : ''}>去重平均</option>
+                        <option value="max" ${fieldConfig.aggregation === 'max' ? 'selected' : ''}>最大值</option>
+                        <option value="min" ${fieldConfig.aggregation === 'min' ? 'selected' : ''}>最小值</option>
+                    </select>
+                </div>
+            `;
+        }
+        
+        // 日期字段：维度选择
+        if (fieldConfig.type === 'date' && (zone === 'row' || zone === 'column')) {
+            html += `
+                <div class="setting-group">
+                    <label>日期维度</label>
+                    <div class="date-dimension-selector">
+                        <button class="date-dimension-btn ${fieldConfig.dateDimension === 'day' ? 'active' : ''}" data-dimension="day">天</button>
+                        <button class="date-dimension-btn ${fieldConfig.dateDimension === 'week' ? 'active' : ''}" data-dimension="week">周</button>
+                        <button class="date-dimension-btn ${fieldConfig.dateDimension === 'month' ? 'active' : ''}" data-dimension="month">月</button>
+                        <button class="date-dimension-btn ${fieldConfig.dateDimension === 'quarter' ? 'active' : ''}" data-dimension="quarter">季</button>
+                        <button class="date-dimension-btn ${fieldConfig.dateDimension === 'year' ? 'active' : ''}" data-dimension="year">年</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        return html;
+    },
+
+    // 筛选值搜索
+    filterSearchValues(fieldName, searchText) {
+        const containerId = `filter-values-${fieldName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        const items = container.querySelectorAll('.filter-value-item');
+        const searchLower = searchText.toLowerCase();
+        
+        items.forEach(item => {
+            const text = item.textContent.toLowerCase();
+            if (text.includes(searchLower)) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    },
+
+    // 全选筛选值
+    selectAllFilterValues(fieldName) {
+        const { zone, index } = this.selectedField;
+        const fieldConfig = this.config.filters[index];
+        
+        if (!fieldConfig) return;
+        
+        const uniqueValues = this.filterValuesCache[fieldName] || [];
+        fieldConfig.selectedValues = [...uniqueValues];
+        
+        this.renderFieldSettings();
+        this.refreshPivotTable();
+    },
+
+    // 清空筛选值
+    clearAllFilterValues(fieldName) {
+        const { zone, index } = this.selectedField;
+        const fieldConfig = this.config.filters[index];
+        
+        if (!fieldConfig) return;
+        
+        fieldConfig.selectedValues = [];
+        
+        this.renderFieldSettings();
+        this.refreshPivotTable();
+    },
+
+    // 切换筛选值
+    toggleFilterValue(fieldName, value, isSelected) {
+        const { zone, index } = this.selectedField;
+        const fieldConfig = this.config.filters[index];
+        
+        if (!fieldConfig) return;
+        
+        if (isSelected) {
+            if (!fieldConfig.selectedValues.includes(value)) {
+                fieldConfig.selectedValues.push(value);
+            }
+        } else {
+            fieldConfig.selectedValues = fieldConfig.selectedValues.filter(v => v !== value);
+        }
+        
+        // 更新选中计数
+        const countElement = document.querySelector('.filter-selected-count');
+        if (countElement) {
+            countElement.textContent = `已选择: ${fieldConfig.selectedValues.length} 个值`;
+        }
+        
+        this.refreshPivotTable();
+    },
+
+    // 绑定字段设置事件
+    bindFieldSettingEvents(zone, index) {
+        // 显示名称
+        const displayNameInput = document.getElementById('field-display-name');
+        if (displayNameInput) {
+            displayNameInput.addEventListener('change', (e) => {
+                this.updateFieldConfig(zone, index, 'displayName', e.target.value);
+            });
+        }
+        
+        // 筛选字段的特殊事件
+        if (zone === 'filter') {
+            // 筛选启用状态
+            const enabledCheckbox = document.getElementById('filter-enabled');
+            if (enabledCheckbox) {
+                enabledCheckbox.addEventListener('change', (e) => {
+                    this.updateFieldConfig(zone, index, 'enabled', e.target.checked);
+                });
+            }
+            
+            // 筛选类型
+            const filterTypeSelect = document.getElementById('filter-type');
+            if (filterTypeSelect) {
+                filterTypeSelect.addEventListener('change', (e) => {
+                    this.updateFieldConfig(zone, index, 'filterType', e.target.value);
+                    this.renderFieldSettings(); // 重新渲染以显示不同的筛选界面
+                });
+            }
+        }
+        
+        // 聚合方式
+        const aggregationSelect = document.getElementById('field-aggregation');
+        if (aggregationSelect) {
+            aggregationSelect.addEventListener('change', (e) => {
+                this.updateFieldConfig(zone, index, 'aggregation', e.target.value);
+            });
+        }
+        
+        // 日期维度
+        const dimensionBtns = document.querySelectorAll('.date-dimension-btn');
+        dimensionBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                dimensionBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.updateFieldConfig(zone, index, 'dateDimension', btn.dataset.dimension);
+            });
+        });
+    },
+
+    // 更新字段配置
+    updateFieldConfig(zone, index, key, value) {
+        let configArray;
+        switch (zone) {
+            case 'filter':
+                configArray = this.config.filters;
+                break;
+            case 'row':
+                configArray = this.config.rows;
+                break;
+            case 'column':
+                configArray = this.config.columns;
+                break;
+            case 'value':
+                configArray = this.config.values;
+                break;
+        }
+        
+        if (configArray[index]) {
+            configArray[index][key] = value;
+            console.log('✅ 更新字段配置:', zone, index, key, value);
+            
+            // 更新区域显示
+            this.renderZone(zone);
+            
+            // 刷新透视表
+            this.refreshPivotTable();
+        }
+    },
+
+    // 初始化事件监听
+    initEventListeners() {
+        // 配置选项
+        const showRowTotals = document.getElementById('show-row-totals');
+        const showColTotals = document.getElementById('show-col-totals');
+        const showGrandTotal = document.getElementById('show-grand-total');
+        const decimalPlaces = document.getElementById('decimal-places');
+        
+        if (showRowTotals) {
+            showRowTotals.checked = this.config.showRowTotals;
+            showRowTotals.addEventListener('change', (e) => {
+                this.config.showRowTotals = e.target.checked;
+                this.refreshPivotTable();
+            });
+        }
+        
+        if (showColTotals) {
+            showColTotals.checked = this.config.showColTotals;
+            showColTotals.addEventListener('change', (e) => {
+                this.config.showColTotals = e.target.checked;
+                this.refreshPivotTable();
+            });
+        }
+        
+        if (showGrandTotal) {
+            showGrandTotal.checked = this.config.showGrandTotal;
+            showGrandTotal.addEventListener('change', (e) => {
+                this.config.showGrandTotal = e.target.checked;
+                this.refreshPivotTable();
+            });
+        }
+        
+        if (decimalPlaces) {
+            decimalPlaces.value = this.config.decimalPlaces;
+            decimalPlaces.addEventListener('change', (e) => {
+                this.config.decimalPlaces = parseInt(e.target.value) || 2;
+                this.refreshPivotTable();
+            });
+        }
+    },
+    
+    // 初始化图表类型选择器
+    initChartTypeSelector() {
+        const btns = document.querySelectorAll('.chart-type-btn');
+        btns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                btns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.chartType = btn.dataset.type;
+                this.renderChart();
+            });
+        });
+    },
+
+    // 刷新透视表
+    refreshPivotTable() {
+        console.log('🔄 刷新透视表...');
+        
+        // 检查配置
+        if (this.config.rows.length === 0 && this.config.columns.length === 0) {
+            this.showEmptyState();
+            return;
+        }
+        
+        try {
+            // 使用全部原始数据
+            let filteredData = this.applyFilters(this.rawData);
+            console.log('📊 筛选后数据:', filteredData.length, '条');
+            
+            // 处理日期维度
+            filteredData = this.processDateDimensions(filteredData);
+            
+            // 构建透视结构
+            const pivotStructure = this.buildPivotStructure(filteredData);
+            
+            // 渲染透视表
+            this.renderPivotTable(pivotStructure);
+            
+            console.log('✅ 透视表刷新完成');
+            
+        } catch (error) {
+            console.error('❌ 刷新透视表失败:', error);
+            this.showError('透視表生成失敗: ' + error.message);
+        }
+    },
+
+    // 应用筛选
+    applyFilters(data) {
+        if (this.config.filters.length === 0) {
+            return data;
+        }
+        
+        return data.filter(row => {
+            return this.config.filters.every(filter => {
+                // 如果筛选未启用，跳过
+                if (filter.enabled === false) {
+                    return true;
+                }
+                
+                const value = row[filter.field];
+                
+                // 处理空值
+                if (value === null || value === undefined || value === '') {
+                    return filter.selectedValues.includes('(空值)');
+                }
+                
+                // 根据筛选类型处理
+                switch (filter.filterType) {
+                    case 'multiple':
+                        // 多选筛选：值在选中列表中
+                        return filter.selectedValues.length === 0 || 
+                               filter.selectedValues.includes(value);
+                    
+                    case 'search':
+                        // 搜索筛选：暂时也使用多选逻辑
+                        return filter.selectedValues.length === 0 || 
+                               filter.selectedValues.includes(value);
+                    
+                    case 'range':
+                        // 范围筛选（数值或日期）
+                        if (filter.type === 'number') {
+                            const numValue = parseFloat(value);
+                            const min = filter.rangeMin !== undefined ? parseFloat(filter.rangeMin) : -Infinity;
+                            const max = filter.rangeMax !== undefined ? parseFloat(filter.rangeMax) : Infinity;
+                            return numValue >= min && numValue <= max;
+                        }
+                        return true;
+                    
+                    default:
+                        return true;
+                }
+            });
+        });
+    },
+
+    // 处理日期维度
+    processDateDimensions(data) {
+        const processed = data.map(row => {
+            const newRow = { ...row };
+            
+            // 处理行字段的日期维度
+            this.config.rows.forEach(rowConfig => {
+                if (rowConfig.type === 'date' && rowConfig.dateDimension) {
+                    const dateValue = row[rowConfig.field];
+                    if (dateValue) {
+                        const dimension = this.extractDateDimension(dateValue, rowConfig.dateDimension);
+                        newRow[`${rowConfig.field}_${rowConfig.dateDimension}`] = dimension;
+                    }
+                }
+            });
+            
+            // 处理列字段的日期维度
+            this.config.columns.forEach(colConfig => {
+                if (colConfig.type === 'date' && colConfig.dateDimension) {
+                    const dateValue = row[colConfig.field];
+                    if (dateValue) {
+                        const dimension = this.extractDateDimension(dateValue, colConfig.dateDimension);
+                        newRow[`${colConfig.field}_${colConfig.dateDimension}`] = dimension;
+                    }
+                }
+            });
+            
+            return newRow;
+        });
+        
+        return processed;
+    },
+
+    // 提取日期维度
+    extractDateDimension(dateStr, dimension) {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        
+        switch (dimension) {
+            case 'day':
+                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            case 'week':
+                const weekNum = this.getWeekNumber(date);
+                return `${year}-W${String(weekNum).padStart(2, '0')}`;
+            case 'month':
+                return `${year}-${String(month).padStart(2, '0')}`;
+            case 'quarter':
+                const quarter = Math.ceil(month / 3);
+                return `${year}-Q${quarter}`;
+            case 'year':
+                return String(year);
+            default:
+                return dateStr;
+        }
+    },
+
+    // 获取周数
+    getWeekNumber(date) {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    },
+
+    // 构建透视结构
+    buildPivotStructure(data) {
+        console.log('🏗️ 构建透视结构...');
+        
+        // 获取行维度和列维度
+        const rowDimensions = this.config.rows.map(r => 
+            r.type === 'date' && r.dateDimension ? `${r.field}_${r.dateDimension}` : r.field
+        );
+        const colDimensions = this.config.columns.map(c => 
+            c.type === 'date' && c.dateDimension ? `${c.field}_${c.dateDimension}` : c.field
+        );
+        
+        // 构建嵌套结构
+        const structure = {
+            rows: {},
+            columns: {},
+            values: {},
+            rowKeys: [],
+            colKeys: []
+        };
+        
+        // 收集所有唯一的行键和列键
+        const rowKeysSet = new Set();
+        const colKeysSet = new Set();
+        
+        data.forEach(row => {
+            // 构建行键
+            const rowKey = rowDimensions.map(dim => row[dim] || '(空)').join('|');
+            rowKeysSet.add(rowKey);
+            
+            // 构建列键
+            if (colDimensions.length > 0) {
+                const colKey = colDimensions.map(dim => row[dim] || '(空)').join('|');
+                colKeysSet.add(colKey);
+                
+                // 存储值
+                const valueKey = `${rowKey}::${colKey}`;
+                if (!structure.values[valueKey]) {
+                    structure.values[valueKey] = [];
+                }
+                structure.values[valueKey].push(row);
+            } else {
+                // 没有列维度，直接存储到行
+                if (!structure.values[rowKey]) {
+                    structure.values[rowKey] = [];
+                }
+                structure.values[rowKey].push(row);
+            }
+        });
+        
+        structure.rowKeys = Array.from(rowKeysSet).sort();
+        structure.colKeys = Array.from(colKeysSet).sort();
+        
+        console.log('📊 透视结构:', {
+            rows: structure.rowKeys.length,
+            columns: structure.colKeys.length,
+            cells: Object.keys(structure.values).length
+        });
+        
+        return structure;
+    },
+
+    // 显示空状态
+    showEmptyState() {
+        const container = document.getElementById('pivot-table-preview');
+        container.innerHTML = `
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <path d="M3 9h18M9 3v18"/>
+                </svg>
+                <p>拖放字段到行或列区域开始分析</p>
+            </div>
+        `;
+        
+        // 隐藏统计信息
+        document.getElementById('pivot-row-count').textContent = '行数: 0';
+        document.getElementById('pivot-col-count').textContent = '列数: 0';
+    },
+
+    // 显示错误
+    showError(message) {
+        const container = document.getElementById('pivot-table-preview');
+        container.innerHTML = `
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#f44336" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/>
+                    <line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                <p style="color:#f44336;">${message}</p>
+            </div>
+        `;
+    },
+
+    // 渲染透视表
+    renderPivotTable(pivotData) {
+        const container = document.getElementById('pivot-table-preview');
+        
+        // 构建HTML表格
+        let html = '<table class="pivot-table">';
+        
+        // 表头
+        html += this.buildTableHeader(pivotData);
+        
+        // 表体
+        html += this.buildTableBody(pivotData);
+        
+        html += '</table>';
+        
+        container.innerHTML = html;
+        
+        // 更新统计信息
+        document.getElementById('pivot-row-count').textContent = `行数: ${pivotData.rowKeys.length}`;
+        document.getElementById('pivot-col-count').textContent = `列数: ${pivotData.colKeys.length || 1}`;
+    },
+
+    // 构建表头
+    buildTableHeader(pivotData) {
+        let html = '<thead>';
+        
+        const hasColumns = pivotData.colKeys.length > 0;
+        const rowDimCount = this.config.rows.length;
+        
+        if (hasColumns) {
+            // 多表头：行维度标题 + 列维度值
+            html += '<tr>';
+            
+            // 行维度标题占位
+            this.config.rows.forEach(rowConfig => {
+                html += `<th class="row-header" rowspan="2">${rowConfig.displayName}</th>`;
+            });
+            
+            // 列维度值（可能需要合并）
+            pivotData.colKeys.forEach(colKey => {
+                const valueColCount = this.config.values.length;
+                html += `<th class="col-header" colspan="${valueColCount}">${colKey.replace(/\|/g, ' - ')}</th>`;
+            });
+            
+            // 汇总列
+            if (this.config.showRowTotals) {
+                html += `<th class="total-header" colspan="${this.config.values.length}" rowspan="2">行汇总</th>`;
+            }
+            
+            html += '</tr>';
+            
+            // 第二行：数据字段标题
+            html += '<tr>';
+            pivotData.colKeys.forEach(() => {
+                this.config.values.forEach(valueConfig => {
+                    html += `<th class="col-header">${valueConfig.displayName}</th>`;
+                });
+            });
+            html += '</tr>';
+            
+        } else {
+            // 单表头：行维度 + 数据字段
+            html += '<tr>';
+            
+            this.config.rows.forEach(rowConfig => {
+                html += `<th class="row-header">${rowConfig.displayName}</th>`;
+            });
+            
+            this.config.values.forEach(valueConfig => {
+                html += `<th class="col-header">${valueConfig.displayName}</th>`;
+            });
+            
+            html += '</tr>';
+        }
+        
+        html += '</thead>';
+        return html;
+    },
+
+    // 构建表体
+    buildTableBody(pivotData) {
+        let html = '<tbody>';
+        
+        const hasColumns = pivotData.colKeys.length > 0;
+        
+        pivotData.rowKeys.forEach(rowKey => {
+            html += '<tr>';
+            
+            // 行维度值
+            const rowParts = rowKey.split('|');
+            rowParts.forEach(part => {
+                html += `<td>${part}</td>`;
+            });
+            
+            if (hasColumns) {
+                // 有列维度：遍历每个列键
+                pivotData.colKeys.forEach(colKey => {
+                    const valueKey = `${rowKey}::${colKey}`;
+                    const records = pivotData.values[valueKey] || [];
+                    
+                    // 计算每个数据字段的值
+                    this.config.values.forEach(valueConfig => {
+                        const aggregatedValue = this.aggregateValues(records, valueConfig);
+                        html += `<td class="numeric">${this.formatNumber(aggregatedValue)}</td>`;
+                    });
+                });
+                
+                // 行汇总
+                if (this.config.showRowTotals) {
+                    const rowRecords = [];
+                    pivotData.colKeys.forEach(colKey => {
+                        const valueKey = `${rowKey}::${colKey}`;
+                        if (pivotData.values[valueKey]) {
+                            rowRecords.push(...pivotData.values[valueKey]);
+                        }
+                    });
+                    
+                    this.config.values.forEach(valueConfig => {
+                        const totalValue = this.aggregateValues(rowRecords, valueConfig);
+                        html += `<td class="numeric total-cell">${this.formatNumber(totalValue)}</td>`;
+                    });
+                }
+                
+            } else {
+                // 没有列维度：直接显示数据值
+                const records = pivotData.values[rowKey] || [];
+                
+                this.config.values.forEach(valueConfig => {
+                    const aggregatedValue = this.aggregateValues(records, valueConfig);
+                    html += `<td class="numeric">${this.formatNumber(aggregatedValue)}</td>`;
+                });
+            }
+            
+            html += '</tr>';
+        });
+        
+        // 总计行
+        if (this.config.showGrandTotal && hasColumns) {
+            html += this.buildGrandTotalRow(pivotData);
+        }
+        
+        html += '</tbody>';
+        return html;
+    },
+
+    // 构建总计行
+    buildGrandTotalRow(pivotData) {
+        let html = '<tr>';
+        
+        // 总计标签
+        const rowDimCount = this.config.rows.length;
+        html += `<td colspan="${rowDimCount}" class="total-cell" style="font-weight:bold;">总计</td>`;
+        
+        // 每列的总计
+        pivotData.colKeys.forEach(colKey => {
+            const colRecords = [];
+            pivotData.rowKeys.forEach(rowKey => {
+                const valueKey = `${rowKey}::${colKey}`;
+                if (pivotData.values[valueKey]) {
+                    colRecords.push(...pivotData.values[valueKey]);
+                }
+            });
+            
+            this.config.values.forEach(valueConfig => {
+                const totalValue = this.aggregateValues(colRecords, valueConfig);
+                html += `<td class="numeric total-cell">${this.formatNumber(totalValue)}</td>`;
+            });
+        });
+        
+        // 总总计
+        if (this.config.showRowTotals) {
+            const allRecords = Object.values(pivotData.values).flat();
+            this.config.values.forEach(valueConfig => {
+                const grandTotal = this.aggregateValues(allRecords, valueConfig);
+                html += `<td class="numeric total-cell" style="font-weight:bold;">${this.formatNumber(grandTotal)}</td>`;
+            });
+        }
+        
+        html += '</tr>';
+        return html;
+    },
+
+    // 聚合值 - 修复文本字段的计数逻辑
+    aggregateValues(records, valueConfig) {
+        if (!records || records.length === 0) return 0;
+        
+        const field = valueConfig.field;
+        const aggregation = valueConfig.aggregation;
+        
+        // 提取数值或文本
+        let values = records.map(r => r[field]);
+        
+        if (values.length === 0) {
+            return aggregation === 'count' || aggregation === 'distinctCount' ? 0 : null;
+        }
+        
+        switch (aggregation) {
+            case 'sum':
+                // 只对数值求和
+                const numericValues = values.map(v => parseFloat(v)).filter(v => !isNaN(v));
+                return numericValues.length > 0 ? numericValues.reduce((sum, v) => sum + v, 0) : 0;
+                
+            case 'count':
+                // 计数：非空值的数量
+                return values.filter(v => v !== null && v !== undefined && v !== '').length;
+                
+            case 'distinctCount':
+                // 去重计数：非空唯一值的数量
+                const distinctValues = [...new Set(values.filter(v => v !== null && v !== undefined && v !== ''))];
+                return distinctValues.length;
+                
+            case 'avg':
+                // 平均值：只对数值计算
+                const avgNumericValues = values.map(v => parseFloat(v)).filter(v => !isNaN(v));
+                return avgNumericValues.length > 0 ? avgNumericValues.reduce((sum, v) => sum + v, 0) / avgNumericValues.length : 0;
+                
+            case 'distinctAvg':
+                // 去重平均：对唯一数值计算平均值
+                const distinctNumericValues = [...new Set(values.map(v => parseFloat(v)).filter(v => !isNaN(v)))];
+                return distinctNumericValues.length > 0 ? distinctNumericValues.reduce((sum, v) => sum + v, 0) / distinctNumericValues.length : 0;
+                
+            case 'max':
+                // 最大值：只对数值计算
+                const maxValues = values.map(v => parseFloat(v)).filter(v => !isNaN(v));
+                return maxValues.length > 0 ? Math.max(...maxValues) : 0;
+                
+            case 'min':
+                // 最小值：只对数值计算
+                const minValues = values.map(v => parseFloat(v)).filter(v => !isNaN(v));
+                return minValues.length > 0 ? Math.min(...minValues) : 0;
+                
+            default:
+                return 0;
+        }
+    },
+
+    // 格式化数字 - 支持小数位数设置
+    formatNumber(value) {
+        if (value === null || value === undefined) return '-';
+        if (typeof value !== 'number') return value;
+        
+        // 使用配置的小数位数
+        const decimalPlaces = this.config.decimalPlaces || 2;
+        
+        // 根据数值大小选择格式
+        if (Math.abs(value) >= 1000000) {
+            return (value / 1000000).toFixed(decimalPlaces) + 'M';
+        } else if (Math.abs(value) >= 1000) {
+            return (value / 1000).toFixed(decimalPlaces) + 'K';
+        } else if (Math.abs(value) < 1 && value !== 0) {
+            return value.toFixed(Math.max(decimalPlaces, 4));
+        } else {
+            return value.toFixed(decimalPlaces);
+        }
+    },
+
+    // 生成图表
+    generateChart() {
+        console.log('📊 生成图表...');
+        
+        // 检查是否有数据
+        if (this.config.rows.length === 0 || this.config.values.length === 0) {
+            alert('請至少添加一個行字段和一個數據字段');
+            return;
+        }
+        
+        // 显示图表区域
+        const chartSection = document.getElementById('pivot-chart-section');
+        chartSection.style.display = 'block';
+        
+        // 渲染图表
+        this.renderChart();
+        
+        // 滚动到图表位置
+        chartSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
+
+    // 渲染图表
+    renderChart() {
+        console.log('🎨 渲染图表，类型:', this.chartType);
+        
+        // 销毁旧图表
+        if (this.chartInstance) {
+            this.chartInstance.dispose();
+        }
+        
+        const container = document.getElementById('pivot-chart-preview');
+        if (!container) return;
+        
+        // 准备图表数据
+        const chartData = this.prepareChartData();
+        
+        if (!chartData || chartData.labels.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>無數據可生成圖表</p></div>';
+            return;
+        }
+        
+        // 创建图表
+        this.chartInstance = echarts.init(container, STATE.theme.chartTheme);
+        
+        // 生成图表选项
+        const option = this.generateChartOption(chartData);
+        
+        this.chartInstance.setOption(option);
+        
+        // 响应式
+        window.addEventListener('resize', () => {
+            if (this.chartInstance) {
+                this.chartInstance.resize();
+            }
+        });
+        
+        console.log('✅ 图表渲染完成');
+    },
+
+    // 准备图表数据
+    prepareChartData() {
+        // 重新计算透视数据（简化版，用于图表）
+        const filteredData = this.applyFilters(this.rawData);
+        const processedData = this.processDateDimensions(filteredData);
+        
+        // 如果没有列维度，使用简单聚合
+        if (this.config.columns.length === 0) {
+            return this.prepareSimpleChartData(processedData);
+        } else {
+            return this.prepareMultiSeriesChartData(processedData);
+        }
+    },
+
+    // 准备简单图表数据（无列维度）
+    prepareSimpleChartData(data) {
+        const rowDimensions = this.config.rows.map(r => 
+            r.type === 'date' && r.dateDimension ? `${r.field}_${r.dateDimension}` : r.field
+        );
+        
+        // 分组聚合
+        const grouped = {};
+        
+        data.forEach(row => {
+            const key = rowDimensions.map(dim => row[dim] || '(空)').join(' - ');
+            
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+            grouped[key].push(row);
+        });
+        
+        // 提取标签和值
+        const labels = Object.keys(grouped).sort();
+        const series = this.config.values.map(valueConfig => {
+            const values = labels.map(label => {
+                const records = grouped[label];
+                return this.aggregateValues(records, valueConfig);
+            });
+            
+            return {
+                name: valueConfig.displayName,
+                data: values
+            };
+        });
+        
+        return {
+            labels: labels,
+            series: series,
+            isSeries: series.length > 1
+        };
+    },
+
+    // 准备多系列图表数据（有列维度）
+    prepareMultiSeriesChartData(data) {
+        const rowDimensions = this.config.rows.map(r => 
+            r.type === 'date' && r.dateDimension ? `${r.field}_${r.dateDimension}` : r.field
+        );
+        const colDimensions = this.config.columns.map(c => 
+            c.type === 'date' && c.dateDimension ? `${c.field}_${c.dateDimension}` : c.field
+        );
+        
+        // 分组聚合
+        const grouped = {};
+        
+        data.forEach(row => {
+            const rowKey = rowDimensions.map(dim => row[dim] || '(空)').join(' - ');
+            const colKey = colDimensions.map(dim => row[dim] || '(空)').join(' - ');
+            
+            if (!grouped[rowKey]) {
+                grouped[rowKey] = {};
+            }
+            if (!grouped[rowKey][colKey]) {
+                grouped[rowKey][colKey] = [];
+            }
+            grouped[rowKey][colKey].push(row);
+        });
+        
+        // 收集所有标签
+        const labels = Object.keys(grouped).sort();
+        const allColKeys = new Set();
+        Object.values(grouped).forEach(colGroups => {
+            Object.keys(colGroups).forEach(colKey => allColKeys.add(colKey));
+        });
+        const colKeys = Array.from(allColKeys).sort();
+        
+        // 为每个列键创建一个系列
+        const series = [];
+        
+        colKeys.forEach(colKey => {
+            this.config.values.forEach(valueConfig => {
+                const values = labels.map(label => {
+                    const records = grouped[label][colKey] || [];
+                    return this.aggregateValues(records, valueConfig);
+                });
+                
+                series.push({
+                    name: `${colKey} - ${valueConfig.displayName}`,
+                    data: values
+                });
+            });
+        });
+        
+        return {
+            labels: labels,
+            series: series,
+            isSeries: true
+        };
+    },
+
+    // 生成折线图选项
+    generateLineChartOption(chartData, baseOption, textColor) {
+        return {
+            ...baseOption,
+            xAxis: {
+                type: 'category',
+                data: chartData.labels,
+                axisLabel: {
+                    color: textColor,
+                    rotate: chartData.labels.length > 8 ? 45 : 0
+                },
+                axisLine: {
+                    lineStyle: { color: textColor }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                axisLabel: {
+                    color: textColor
+                },
+                axisLine: {
+                    lineStyle: { color: textColor }
+                },
+                splitLine: {
+                    lineStyle: {
+                        color: STATE.theme.dark ? '#444' : '#e0e0e0'
+                    }
+                }
+            },
+            series: chartData.series.map(s => ({
+                name: s.name,
+                type: 'line',
+                data: s.data,
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 8,
+                lineStyle: {
+                    width: 3
+                },
+                areaStyle: {
+                    opacity: 0.3
+                },
+                label: {
+                    show: false
+                }
+            }))
+        };
+    },
+
+    // 生成饼图选项
+    generatePieChartOption(chartData, baseOption, textColor) {
+        // 饼图只使用第一个系列
+        const series = chartData.series[0];
+        
+        return {
+            ...baseOption,
+            tooltip: {
+                trigger: 'item',
+                backgroundColor: STATE.theme.dark ? 'rgba(50,50,50,0.9)' : 'rgba(255,255,255,0.9)',
+                textStyle: { color: textColor },
+                formatter: '{b}: {c} ({d}%)'
+            },
+            series: [{
+                type: 'pie',
+                radius: ['40%', '70%'],
+                center: ['50%', '55%'],
+                avoidLabelOverlap: true,
+                itemStyle: {
+                    borderRadius: 10,
+                    borderColor: 'transparent',
+                    borderWidth: 2
+                },
+                label: {
+                    show: true,
+                    color: textColor,
+                    formatter: '{b}: {d}%',
+                    position: 'outside',
+                    distance: 10
+                },
+                labelLine: {
+                    show: true,
+                    length: 20,
+                    length2: 10
+                },
+                emphasis: {
+                    label: {
+                        show: true,
+                        fontSize: 14,
+                        fontWeight: 'bold'
+                    },
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                },
+                data: chartData.labels.map((label, idx) => ({
+                    name: label,
+                    value: series.data[idx]
+                }))
+            }]
+        };
+    },
+	
+    // 生成图表选项
+    generateChartOption(chartData) {
+        const isDark = STATE.theme.dark;
+        const textColor = isDark ? '#e0e0e0' : '#333';
+        
+        const baseOption = {
+            backgroundColor: 'transparent',
+            title: {
+                text: '数据可视化',
+                left: 'center',
+                top: 10,
+                textStyle: {
+                    color: textColor,
+                    fontSize: 16,
+                    fontWeight: 600
+                }
+            },
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: isDark ? 'rgba(50,50,50,0.9)' : 'rgba(255,255,255,0.9)',
+                borderColor: '#ccc',
+                borderWidth: 1,
+                textStyle: {
+                    color: textColor
+                },
+                axisPointer: {
+                    type: 'shadow'
+                }
+            },
+            legend: {
+                show: chartData.isSeries,
+                top: 'bottom',
+                left: 'center',
+                textStyle: {
+                    color: textColor
+                },
+                type: 'scroll'
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: chartData.isSeries ? '15%' : '10%',
+                top: '15%',
+                containLabel: true
+            }
+        };
+        
+        switch (this.chartType) {
+            case 'bar':
+                return this.generateBarChartOption(chartData, baseOption, textColor);
+            case 'line':
+                return this.generateLineChartOption(chartData, baseOption, textColor);
+            case 'pie':
+                return this.generatePieChartOption(chartData, baseOption, textColor);
+            default:
+                return this.generateBarChartOption(chartData, baseOption, textColor);
+        }
+    },
+
+    // 生成柱状图选项
+    generateBarChartOption(chartData, baseOption, textColor) {
+        return {
+            ...baseOption,
+            xAxis: {
+                type: 'category',
+                data: chartData.labels,
+                axisLabel: {
+                    color: textColor,
+                    rotate: chartData.labels.length > 8 ? 45 : 0,
+                    interval: 0
+                },
+                axisLine: {
+                    lineStyle: { color: textColor }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                axisLabel: {
+                    color: textColor
+                },
+                axisLine: {
+                    lineStyle: { color: textColor }
+                },
+                splitLine: {
+                    lineStyle: {
+                        color: STATE.theme.dark ? '#444' : '#e0e0e0'
+                    }
+                }
+            },
+            series: chartData.series.map(s => ({
+                name: s.name,
+                type: 'bar',
+                data: s.data,
+                barWidth: '60%',
+                itemStyle: {
+                    borderRadius: [5, 5, 0, 0]
+                },
+                label: {
+                    show: chartData.labels.length < 20,
+                    position: 'top',
+                    color: textColor,
+                    fontSize: 10
+                }
+            }))
+        };
+    },
+
+    // 导出图片
+    exportImage() {
+        if (!this.chartInstance) {
+            alert('請先生成圖表');
+            return;
+        }
+        
+        const url = this.chartInstance.getDataURL({
+            type: 'png',
+            pixelRatio: 2,
+            backgroundColor: '#fff'
+        });
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `pivot_chart_${Date.now()}.png`;
+        link.click();
+        
+        console.log('✅ 图表图片导出完成');
+    },
+
+    // 下载数据
+    downloadData() {
+        console.log('💾 下载透视表数据...');
+        
+        // 检查是否有数据
+        if (this.config.rows.length === 0 && this.config.columns.length === 0) {
+            alert('請先配置透視表');
+            return;
+        }
+        
+        try {
+            // 获取当前透视表数据
+            const pivotData = this.computePivotTable();
+            
+            if (!pivotData) {
+                alert('無數據可下載');
+                return;
+            }
+            
+            // 转换为可下载的格式
+            const exportData = this.convertPivotToExportFormat(pivotData);
+            
+            // 生成CSV
+            this.exportToCSV(exportData);
+            
+            console.log('✅ 数据下载完成');
+            
+        } catch (error) {
+            console.error('❌ 下载数据失败:', error);
+            alert('下載失敗: ' + error.message);
+        }
+    },
+
+    // 转换透视数据为导出格式
+    convertPivotToExportFormat(pivotData) {
+        const rows = [];
+        
+        // 构建表头
+        const header = [];
+        
+        // 行维度标题
+        this.config.rows.forEach(r => {
+            header.push(r.displayName);
+        });
+        
+        if (pivotData.colKeys.length > 0) {
+            // 有列维度：为每个列键添加数据字段
+            pivotData.colKeys.forEach(colKey => {
+                this.config.values.forEach(v => {
+                    header.push(`${colKey} - ${v.displayName}`);
+                });
+            });
+            
+            // 行汇总
+            if (this.config.showRowTotals) {
+                this.config.values.forEach(v => {
+                    header.push(`行汇总 - ${v.displayName}`);
+                });
+            }
+        } else {
+            // 没有列维度：直接添加数据字段
+            this.config.values.forEach(v => {
+                header.push(v.displayName);
+            });
+        }
+        
+        rows.push(header);
+        
+        // 数据行
+        pivotData.rowKeys.forEach(rowKey => {
+            const row = [];
+            
+            // 行维度值
+            rowKey.split('|').forEach(part => {
+                row.push(part);
+            });
+            
+            if (pivotData.colKeys.length > 0) {
+                // 每列的值
+                pivotData.colKeys.forEach(colKey => {
+                    const valueKey = `${rowKey}::${colKey}`;
+                    const records = pivotData.values[valueKey] || [];
+                    
+                    this.config.values.forEach(valueConfig => {
+                        const value = this.aggregateValues(records, valueConfig);
+                        row.push(value);
+                    });
+                });
+                
+                // 行汇总
+                if (this.config.showRowTotals) {
+                    const rowRecords = [];
+                    pivotData.colKeys.forEach(colKey => {
+                        const valueKey = `${rowKey}::${colKey}`;
+                        if (pivotData.values[valueKey]) {
+                            rowRecords.push(...pivotData.values[valueKey]);
+                        }
+                    });
+                    
+                    this.config.values.forEach(valueConfig => {
+                        const totalValue = this.aggregateValues(rowRecords, valueConfig);
+                        row.push(totalValue);
+                    });
+                }
+            } else {
+                // 直接添加值
+                const records = pivotData.values[rowKey] || [];
+                this.config.values.forEach(valueConfig => {
+                    const value = this.aggregateValues(records, valueConfig);
+                    row.push(value);
+                });
+            }
+            
+            rows.push(row);
+        });
+        
+        return rows;
+    },
+
+    // 导出为CSV
+    exportToCSV(data) {
+        const csvContent = data.map(row => 
+            row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+        ).join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `pivot_${this.currentTabId}_${Date.now()}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    },
+
+    // 替换页面图表
+    replacePageChart() {
+        if (!this.chartInstance) {
+            alert('請先生成圖表');
+            return;
+        }
+        
+        const currentTab = this.currentTabId;
+        const chartContainer = document.getElementById(`${currentTab}-chart`);
+        
+        if (!chartContainer) {
+            alert('找不到頁面圖表容器');
+            return;
+        }
+        
+        // 获取当前图表的配置
+        const option = this.chartInstance.getOption();
+        
+        // 销毁旧图表
+        const oldChart = STATE.charts.get(`${currentTab}-chart`);
+        if (oldChart) {
+            oldChart.dispose();
+        }
+        
+        // 创建新图表
+        const newChart = echarts.init(chartContainer, STATE.theme.chartTheme);
+        newChart.setOption(option);
+        
+        // 更新状态
+        STATE.charts.set(`${currentTab}-chart`, newChart);
+        
+        alert('圖表已成功替換到頁面！');
+        console.log('✅ 图表已替换到页面');
+    },
+
+    // 保存配置
+    async saveConfig() {
+        console.log('💾 保存透视配置...');
+        
+        if (!confirm('確定要保存當前的透視表配置嗎？')) {
+            return;
+        }
+        
+        try {
+            // 构建配置JSON
+            const configPayload = [
+                {
+                    tab: this.currentTabId,
+                    order: 1,
+                    userid: STATE.userInfo.userId,
+                    config: JSON.stringify({
+                        type: 'pivot',
+                        filters: this.config.filters,
+                        rows: this.config.rows,
+                        columns: this.config.columns,
+                        values: this.config.values,
+                        options: {
+                            showRowTotals: this.config.showRowTotals,
+                            showColTotals: this.config.showColTotals,
+                            showGrandTotal: this.config.showGrandTotal,
+                            decimalPlaces: this.config.decimalPlaces
+                        },
+                        chartType: this.chartType
+                    })
+                }
+            ];
+            
+            console.log('📤 发送配置到N8N:', configPayload);
+            
+            // 发送到N8N webhook
+            const webhook = CONFIG.N8N_WEBHOOKS.user_design_charts || 
+                           'https://your-n8n-instance.com/webhook/user_design_charts';
+            
+            const response = await fetch(webhook, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(configPayload)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('✅ 保存成功:', result);
+            
+            alert('配置已保存成功！');
+            
+        } catch (error) {
+            console.error('❌ 保存配置失败:', error);
+            alert('保存失敗: ' + error.message);
+        }
+    },
+
+    // 重置
+    reset() {
+        if (!confirm('確定要重置所有設置嗎？這將清空所有已配置的字段。')) {
+            return;
+        }
+        
+        // 清空配置
+        this.config = {
+            filters: [],
+            rows: [],
+            columns: [],
+            values: [],
+            showRowTotals: true,
+            showColTotals: true,
+            showGrandTotal: true,
+            decimalPlaces: 2
+        };
+        
+        // 清除选中的字段
+        this.selectedField = null;
+        
+        // 重置图表类型
+        this.chartType = 'bar';
+        document.querySelectorAll('.chart-type-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.type === 'bar');
+        });
+        
+        // 清空所有区域
+        ['filter', 'row', 'column', 'value'].forEach(zone => {
+            this.renderZone(zone);
+        });
+        
+        // 清空字段设置
+        this.renderFieldSettings();
+        
+        // 显示空状态
+        this.showEmptyState();
+        
+        // 隐藏图表区域
+        document.getElementById('pivot-chart-section').style.display = 'none';
+        
+        console.log('🔄 已重置所有设置');
+    },
+
+    // 关闭设计器
+    close() {
+        // 销毁图表实例
+        if (this.chartInstance) {
+            this.chartInstance.dispose();
+            this.chartInstance = null;
+        }
+        
+        // 隐藏模态框
+        const modal = document.getElementById('pivot-designer-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        
+        // 清理状态
+        this.currentTabId = null;
+        this.rawData = null;
+        this.selectedField = null;
+        
+        console.log('👋 透视分析器已关闭');
+    }
+};
+
+// ==================== 全局函数：打开智能透视分析器 ====================
+window.openPivotDesigner = function(tabId) {
+    // 如果没有传入tabId，使用当前tab
+    const targetTab = tabId || STATE.currentTab;
+    
+    if (targetTab === 'overview') {
+        alert('概覽頁面不支持透視分析');
+        return;
+    }
+    
+    console.log('🚀 启动智能透视分析器:', targetTab);
+    PivotDesigner.open(targetTab);
+};
+
+// ==================== 修改现有的图表设计按钮功能 ====================
+// 在 Renderer.renderDynamicContent 中添加设计按钮的事件绑定
+const originalRenderDynamicContent = Renderer.renderDynamicContent;
+Renderer.renderDynamicContent = function(container, data, tabId) {
+    // 调用原始函数
+    originalRenderDynamicContent.call(this, container, data, tabId);
+    
+    // 绑定新的设计按钮
+    const designBtn = document.getElementById(`${tabId}-chart-design`);
+    if (designBtn) {
+        // 移除旧的事件监听器
+        const newBtn = designBtn.cloneNode(true);
+        designBtn.parentNode.replaceChild(newBtn, designBtn);
+        
+        // 绑定新的事件：打开智能透视分析器
+        newBtn.addEventListener('click', () => {
+            console.log('🎯 点击设计按钮，打开智能透视分析器');
+            openPivotDesigner(tabId);
+        });
+        
+        // 显示按钮
+        newBtn.style.display = 'inline-block';
+    }
+};
+
+// ==================== 添加快捷键支持 ====================
+document.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd + Shift + P: 打开透视分析器
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
+        e.preventDefault();
+        const currentTab = STATE.currentTab;
+        if (currentTab && currentTab !== 'overview') {
+            openPivotDesigner(currentTab);
+        }
+    }
+    
+    // ESC: 关闭透视分析器
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('pivot-designer-modal');
+        if (modal && modal.style.display === 'flex') {
+            PivotDesigner.close();
+        }
+    }
+});
 
 // ==================== 应用入口 ====================
 document.addEventListener('DOMContentLoaded', () => {
